@@ -52,5 +52,10 @@ fi
 mkdir -p "$DEST"
 rm -rf "$DEST/Rozmova.app"
 cp -R "$APP" "$DEST/"
-open "$DEST/Rozmova.app" || { sleep 1; open "$DEST/Rozmova.app"; }
+# Right after the copy Launch Services may not know the app yet (error -600): retry for a few seconds.
+for attempt in 1 2 3 4 5; do
+    open "$DEST/Rozmova.app" 2>/dev/null && break
+    [ "$attempt" = 5 ] && echo "Could not launch it; open $DEST/Rozmova.app by hand."
+    sleep 1
+done
 echo "Installed: $DEST/Rozmova.app"
