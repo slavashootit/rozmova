@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// What to do when a call starts.
@@ -11,6 +12,32 @@ enum AutoMode: String {
 enum SpeechEngine: String {
     case parakeet   // NVIDIA Parakeet on this Mac, free
     case groq       // Groq cloud API, needs a key
+}
+
+/// What the screen recording shows.
+enum CaptureSource: Equatable {
+    case mainDisplay
+    case display(CGDirectDisplayID)
+    /// The call app's largest window, on whichever display it is.
+    case callWindow
+
+    var rawValue: String {
+        switch self {
+        case .mainDisplay: return "main"
+        case .display(let id): return "display:\(id)"
+        case .callWindow: return "window"
+        }
+    }
+
+    init(rawValue: String) {
+        if rawValue == "window" {
+            self = .callWindow
+        } else if rawValue.hasPrefix("display:"), let id = UInt32(rawValue.dropFirst("display:".count)) {
+            self = .display(id)
+        } else {
+            self = .mainDisplay
+        }
+    }
 }
 
 enum Prefs {
@@ -81,6 +108,35 @@ enum Prefs {
     static var engine: SpeechEngine {
         get { SpeechEngine(rawValue: defaults.string(forKey: "engine") ?? "") ?? .parakeet }
         set { defaults.set(newValue.rawValue, forKey: "engine") }
+    }
+
+    static var captureSource: CaptureSource {
+        get { CaptureSource(rawValue: defaults.string(forKey: "captureSource") ?? "") }
+        set { defaults.set(newValue.rawValue, forKey: "captureSource") }
+    }
+
+    /// ⌃⌥R starts or stops a recording from anywhere.
+    static var hotKey: Bool {
+        get { defaults.object(forKey: "hotKey") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "hotKey") }
+    }
+
+    /// A notification a minute before an online meeting from Calendar.
+    static var remindMeetings: Bool {
+        get { defaults.object(forKey: "remindMeetings") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "remindMeetings") }
+    }
+
+    /// Look for a newer release on GitHub once a day.
+    static var checkUpdates: Bool {
+        get { defaults.object(forKey: "checkUpdates") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "checkUpdates") }
+    }
+
+    /// The newest version already announced, so each one is announced once.
+    static var announcedVersion: String? {
+        get { defaults.string(forKey: "announcedVersion") }
+        set { defaults.set(newValue, forKey: "announcedVersion") }
     }
 
     /// Groq model: whisper-large-v3 (more accurate) or whisper-large-v3-turbo (cheaper).

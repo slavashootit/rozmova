@@ -11,6 +11,8 @@ enum Transcriber {
         let pieces: [Segment]
         /// Pieces merged into speaker turns: what the transcript shows.
         let turns: [Segment]
+        /// Voice print per label of the other side, for recognizing people in later calls.
+        let voices: [String: [Float]]
     }
 
     static func transcribe(_ layout: Layout, language: String, engine: SpeechEngine) async throws -> Result {
@@ -33,11 +35,14 @@ enum Transcriber {
         }
         // The model holds a lot of memory; the app idles in the menu bar until the next call.
         await Parakeet.unload()
+        var voices: [String: [Float]] = [:]
         if Prefs.splitVoices {
-            theirs = await Voices.label(theirs, audio: layout.system)
+            let labeled = await Voices.label(theirs, audio: layout.system)
+            theirs = labeled.segments
+            voices = labeled.prints
         }
         let pieces = (removeEcho(mine, heard: theirs) + theirs).sorted { $0.start < $1.start }
-        return Result(pieces: pieces, turns: merge(pieces))
+        return Result(pieces: pieces, turns: merge(pieces), voices: voices)
     }
 
     /// Drops empty and invented phrases, collapses loops, labels the speaker.

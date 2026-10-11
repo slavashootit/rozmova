@@ -9,8 +9,13 @@ struct CalEvent: Identifiable {
     let end: Date
     let calendar: String
     let color: NSColor
-    /// Has attendees or a meeting link: more likely the call than a "focus time" block.
-    let isMeeting: Bool
+    /// Join link of an online meeting (Zoom, Meet, Teams…); nil for an offline event.
+    let onlineLink: URL?
+    let hasAttendees: Bool
+
+    var isOnline: Bool { onlineLink != nil }
+    /// More likely to be the call than a "focus time" block.
+    var isMeeting: Bool { isOnline || hasAttendees }
 
     var link: EventLink { EventLink(title: title, start: start, end: end, calendar: calendar) }
 }
@@ -64,19 +69,15 @@ final class CalendarEvents: ObservableObject {
         return store.events(matching: predicate)
             .filter { !$0.isAllDay }
             .map { event in
-                let text = [event.location, event.notes, event.url?.absoluteString]
-                    .compactMap { $0?.lowercased() }
-                    .joined(separator: " ")
-                let link = ["zoom.us", "meet.google", "teams.microsoft", "teams.live", "facetime", "webex"]
-                    .contains { text.contains($0) }
-                return CalEvent(
+                CalEvent(
                     id: "\(event.eventIdentifier ?? event.calendarItemIdentifier)@\(event.startDate.timeIntervalSince1970)",
                     title: (event.title ?? "").isEmpty ? "Без назви" : event.title,
                     start: event.startDate,
                     end: event.endDate,
                     calendar: event.calendar.title,
                     color: event.calendar.color ?? .systemGray,
-                    isMeeting: event.hasAttendees || link
+                    onlineLink: Self.meetingLink(in: [event.url?.absoluteString, event.location, event.notes]),
+                    hasAttendees: event.hasAttendees
                 )
             }
             .sorted { $0.start < $1.start }
@@ -98,6 +99,31 @@ final class CalendarEvents: ObservableObject {
             .filter { $0.end > now }
             .sorted { ($0.isMeeting ? 0 : 1, abs($0.start.timeIntervalSince(now))) < ($1.isMeeting ? 0 : 1, abs($1.start.timeIntervalSince(now))) }
             .first
+    }
+
+    /// Online meetings starting within the next `seconds`.
+    func onlineStarting(within seconds: Double, from now: Date = Date()) -> [CalEvent] {
+        events(from: now, to: now.addingTimeInterval(seconds))
+            .filter { $0.isOnline && $0.start >= now.addingTimeInterval(-30) && $0.start <= now.addingTimeInterval(seconds) }
+    }
+
+    private static let meetingHosts = ["zoom.us", "meet.google.com", "teams.microsoft.com", "teams.live.com",
+                                       "facetime.apple.com", "webex.com", "whereby.com", "meet.jit.si"]
+    private static let linkDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+
+    /// The first video call link in the event's URL, location or notes. An event without one is
+    /// treated as offline: a link pasted only in a chat cannot be seen.
+    static func meetingLink(in texts: [String?]) -> URL? {
+        for text in texts.compactMap({ $0 }) where !text.isEmpty {
+            let range = NSRange(text.startIndex..., in: text)
+            for match in linkDetector?.matches(in: text, range: range) ?? [] {
+                guard let url = match.url, let host = url.host?.lowercased() else { continue }
+                if meetingHosts.contains(where: { host == $0 || host.hasSuffix("." + $0) }) {
+                    return url
+                }
+            }
+        }
+        return nil
     }
 
     /// The event the call overlaps most. Grazing an edge does not count: the overlap must be at

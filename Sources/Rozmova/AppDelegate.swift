@@ -17,6 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var processingCount = 0
     private let settings = SettingsWindowController()
     private let cabinet = CabinetWindowController()
+    private let updates = Updates()
+    private var hotKey: HotKey?
+    /// Online meetings already announced, so each gets one reminder.
+    private var remindedMeetings: Set<String> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         try? FileManager.default.createDirectory(at: Prefs.recordingsFolder, withIntermediateDirectories: true)
@@ -46,6 +50,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if Prefs.engine == .parakeet {
             Task.detached(priority: .background) { await Parakeet.prefetch() }
         }
+
+        applyHotKey()
+        NotificationCenter.default.addObserver(forName: .rozmovaHotKeyChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyHotKey() }
+        }
+
+        // A reminder shortly before online meetings from Calendar.
+        let meetingTimer = Timer(timeInterval: 30, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.remindMeetings() }
+        }
+        RunLoop.main.add(meetingTimer, forMode: .common)
+
+        // New releases: at launch, then once a day.
+        updates.onFound = { [weak self] release in
+            guard Prefs.announcedVersion != release.version else { return }
+            Prefs.announcedVersion = release.version
+            self?.notifier.post(title: "Вийшла Rozmova \(release.version)",
+                                body: "У тебе \(Updates.current). Клікни, щоб відкрити сторінку завантаження.",
+                                link: release.page)
+        }
+        Task { await updates.check() }
+        let updateTimer = Timer(timeInterval: 24 * 3600, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                Task { await self.updates.check() }
+            }
+        }
+        RunLoop.main.add(updateTimer, forMode: .common)
 
         // `open -a Rozmova --args --demo-prompt` shows the prompt without a real call.
         if CommandLine.arguments.contains("--demo-prompt") {
@@ -113,7 +145,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let newSession: RecordingSession
         do {
             // Started during a detected call: stop when that call ends. Otherwise only by hand.
-            newSession = try RecordingSession(app: call?.name ?? "Запис", title: title, autoStop: call != nil)
+            newSession = try RecordingSession(app: call?.name ?? "Запис", bundleID: call?.bundleID, title: title,
+                                              autoStop: call != nil)
         } catch {
             starting = false
             updateStatus()
@@ -193,6 +226,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    // MARK: - Shortcut, meetings
+
+    private func applyHotKey() {
+        hotKey?.unregister()
+        hotKey = nil
+        guard Prefs.hotKey else { return }
+        hotKey = HotKey.record { [weak self] in self?.toggleRecording() }
+    }
+
+    private func toggleRecording() {
+        if session != nil {
+            stopRecording()
+        } else {
+            recordPendingCall()
+        }
+    }
+
+    private func remindMeetings() {
+        let calendar = CalendarEvents.shared
+        guard Prefs.remindMeetings, session == nil, calendar.hasAccess else { return }
+        for event in calendar.onlineStarting(within: 70) where !remindedMeetings.contains(event.id) {
+            remindedMeetings.insert(event.id)
+            let time = DateFormatter.localizedString(from: event.start, dateStyle: .none, timeStyle: .short)
+            notifier.post(title: "Скоро: \(event.title)",
+                          body: "Онлайн-зустріч о \(time). Клік — приєднатися; запис Rozmova запропонує, щойно почнеться дзвінок.",
+                          link: event.onlineLink)
+        }
+    }
+
     // MARK: - Status item
 
     private func setUpStatusItem() {
@@ -238,13 +300,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         menu.addItem(NSMenuItem(title: statusLine(), action: nil, keyEquivalent: ""))
+        if let release = updates.available {
+            add(to: menu, "⬆︎ Нова версія \(release.version) — завантажити", #selector(openUpdate))
+        }
         if Prefs.engine == .groq, Groq.apiKey() == nil {
             add(to: menu, "⚠︎ Немає ключа Groq — відкрити налаштування", #selector(openSettings))
         }
-        if session != nil {
-            add(to: menu, "Зупинити запис", #selector(stopClicked))
-        } else {
-            add(to: menu, "Почати запис", #selector(startClicked))
+        let record = session != nil
+            ? add(to: menu, "Зупинити запис", #selector(stopClicked))
+            : add(to: menu, "Почати запис", #selector(startClicked))
+        if Prefs.hotKey {
+            // Shown for reference; the shortcut itself works system-wide through HotKey.
+            record.keyEquivalent = "r"
+            record.keyEquivalentModifierMask = [.control, .option]
         }
         if let call = detector.current, session == nil {
             add(to: menu, "\(call.name) — не дзвінок, ігнорувати", #selector(ignoreClicked))
@@ -306,6 +374,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openRecordings() {
         try? FileManager.default.createDirectory(at: Prefs.recordingsFolder, withIntermediateDirectories: true)
         NSWorkspace.shared.open(Prefs.recordingsFolder)
+    }
+
+    @objc private func openUpdate() {
+        if let page = updates.available?.page {
+            NSWorkspace.shared.open(page)
+        }
     }
 
     @objc private func openSettings() {

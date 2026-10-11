@@ -38,6 +38,8 @@ struct Layout {
     /// Every piece of speech with its speaker and time, before merging into turns: the
     /// statistics are computed from it.
     var segments: URL { history.appendingPathComponent("segments.json") }
+    /// A voice print per "Співрозмовник N": names typed for them teach later calls who is who.
+    var voices: URL { history.appendingPathComponent("voices.json") }
 
     var raw: URL { Prefs.rawFolder.appendingPathComponent(name, isDirectory: true) }
     var mic: URL { raw.appendingPathComponent("mic.m4a") }
@@ -67,6 +69,8 @@ struct SessionMeta: Codable {
     var speakerNames: [String: String]?
     /// The macOS Calendar event the call happened in, matched by time.
     var event: EventLink?
+    /// Labels named automatically by voice from earlier calls, not typed by the user.
+    var recognized: [String]?
 
     /// The calendar event names a call better than a window title like "Zoom Meeting".
     var displayTitle: String {

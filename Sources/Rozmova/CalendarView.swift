@@ -186,15 +186,26 @@ struct CalendarView: View {
                             .frame(width: 4, height: 32)
                             .padding(.horizontal, 14)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(event.title).lineLimit(1)
+                            HStack(spacing: 5) {
+                                if event.isOnline {
+                                    Image(systemName: "video.fill").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Text(event.title).lineLimit(1)
+                            }
                             Text(Format.timeRange(event.start, event.end.timeIntervalSince(event.start)) + " · " + event.calendar)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text(event.end < Date() ? "не записано" : "попереду")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        // Offline events are just shown: there was nothing to record.
+                        if let link = event.onlineLink {
+                            if event.end < Date() {
+                                Text("не записано").font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                Button("Приєднатися") { NSWorkspace.shared.open(link) }
+                                    .controlSize(.small)
+                            }
+                        }
                     }
                 }
             }
@@ -301,13 +312,20 @@ private struct DayCell: View {
             .help("\(call.title), \(Format.timeRange(call.meta.started, call.meta.duration))")
         case .meeting(let event):
             HStack(spacing: 4) {
-                Circle().strokeBorder(Color(nsColor: event.color), lineWidth: 1.5).frame(width: 6, height: 6)
+                if event.isOnline {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 7))
+                        .foregroundStyle(Color(nsColor: event.color))
+                        .frame(width: 8)
+                } else {
+                    Circle().strokeBorder(Color(nsColor: event.color), lineWidth: 1.5).frame(width: 6, height: 6)
+                }
                 Text(Self.time(event.start)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
                 Text(event.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .help("\(event.title), \(event.calendar)")
+            .help("\(event.title), \(event.calendar)" + (event.isOnline ? ", онлайн" : ""))
         }
     }
 

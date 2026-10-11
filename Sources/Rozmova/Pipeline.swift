@@ -25,6 +25,22 @@ enum Pipeline {
         }
         let result = try await Transcriber.transcribe(layout, language: meta.language, engine: Prefs.engine)
         try SegmentsFile.save(result.pieces, to: layout)
+        if !result.voices.isEmpty {
+            try VoiceBook.save(result.voices, to: layout)
+            // Voices you named in earlier calls; names already typed for this call stay.
+            var names = meta.speakerNames ?? [:]
+            var recognized = meta.recognized ?? []
+            let guesses = VoiceBook.recognize(result.voices, skipping: layout.name)
+            for (label, name) in guesses where (names[label] ?? "").isEmpty {
+                names[label] = name
+                recognized.append(label)
+            }
+            if names != (meta.speakerNames ?? [:]) {
+                meta.speakerNames = names
+                meta.recognized = recognized
+                try meta.save(to: layout)
+            }
+        }
         try Transcript.write(meta: meta, layout: layout, turns: result.turns)
         return Result(file: layout.transcript, note: result.turns.isEmpty ? "Мови в записі не знайшлося." : nil)
     }

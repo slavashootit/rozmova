@@ -60,6 +60,11 @@ final class PlayerModel: ObservableObject {
         player.replaceCurrentItem(with: url.map { AVPlayerItem(url: $0) })
     }
 
+    /// Moves to a moment without starting playback (a search match).
+    func seek(to seconds: Double) {
+        player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
+    }
+
     func play(from seconds: Double) {
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
         player.play()
@@ -105,7 +110,7 @@ private struct CallList: View {
             ForEach(library.weeks) { week in
                 Section(week.id) {
                     ForEach(week.calls) { call in
-                        CallRow(call: call)
+                        CallRow(call: call, snippet: library.snippet(for: call))
                     }
                 }
             }
@@ -117,15 +122,18 @@ private struct CallList: View {
 
 private struct CallRow: View {
     let call: CallRecord
+    /// The matching words while searching, shown instead of the date.
+    var snippet: String?
 
     var body: some View {
         HStack(spacing: 10) {
             AppBadge(app: call.meta.app, size: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(call.title).fontWeight(.medium).lineLimit(1)
-                Text(Format.dayTime(call.meta.started))
+                Text(snippet ?? Format.dayTime(call.meta.started))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
             Spacer(minLength: 4)
             Text(Format.minutes(call.meta.duration))
@@ -327,7 +335,7 @@ private struct CallDetail: View {
             .frame(maxWidth: 420)
 
             switch player.tab {
-            case .transcript: TranscriptView(call: call, player: player)
+            case .transcript: TranscriptView(call: call, player: player, query: library.query)
             case .stats: StatsView(call: call)
             case .people: PeopleView(call: call, library: library)
             }
@@ -381,6 +389,8 @@ private struct Turn: Identifiable {
 private struct TranscriptView: View {
     let call: CallRecord
     @ObservedObject var player: PlayerModel
+    /// The sidebar search: matches are highlighted and the first one is scrolled to.
+    let query: String
 
     var body: some View {
         if call.pieces.isEmpty {
@@ -392,38 +402,64 @@ private struct TranscriptView: View {
             }
         } else {
             let turns = call.turns.enumerated().map { Turn(id: $0.offset, segment: $0.element) }
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(turns) { item in
-                        let turn = item.segment
-                        let name = call.name(of: turn.speaker)
-                        let color = Palette.color(for: turn.speaker, in: call.speakers)
-                        HStack(alignment: .top, spacing: 12) {
-                            Avatar(name: name, color: color, size: 30)
-                            VStack(alignment: .leading, spacing: 3) {
-                                HStack(spacing: 8) {
-                                    Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(color)
-                                    Button {
-                                        player.play(from: turn.start)
-                                    } label: {
-                                        Label(Timecode.string(turn.start), systemImage: "play.fill")
-                                            .font(.caption.monospacedDigit())
+            let needle = query.trimmingCharacters(in: .whitespaces)
+            let firstMatch = needle.isEmpty ? nil : turns.first(where: {
+                $0.segment.text.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+            })
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        ForEach(turns) { item in
+                            let turn = item.segment
+                            let name = call.name(of: turn.speaker)
+                            let color = Palette.color(for: turn.speaker, in: call.speakers)
+                            HStack(alignment: .top, spacing: 12) {
+                                Avatar(name: name, color: color, size: 30)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 8) {
+                                        Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(color)
+                                        Button {
+                                            player.play(from: turn.start)
+                                        } label: {
+                                            Label(Timecode.string(turn.start), systemImage: "play.fill")
+                                                .font(.caption.monospacedDigit())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .foregroundStyle(.secondary)
+                                        .help("Слухати з цього місця")
                                     }
-                                    .buttonStyle(.plain)
-                                    .foregroundStyle(.secondary)
-                                    .help("Слухати з цього місця")
+                                    Text(Self.highlight(turn.text, needle))
+                                        .textSelection(.enabled)
+                                        .lineSpacing(2)
+                                        .frame(maxWidth: 760, alignment: .leading)
                                 }
-                                Text(turn.text)
-                                    .textSelection(.enabled)
-                                    .lineSpacing(2)
-                                    .frame(maxWidth: 760, alignment: .leading)
                             }
+                            .id(item.id)
                         }
                     }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
+                // Opened from a search: straight to the first match, player cued there.
+                .task(id: "\(call.id)|\(needle)") {
+                    guard let firstMatch else { return }
+                    try? await Task.sleep(for: .milliseconds(300))
+                    withAnimation { proxy.scrollTo(firstMatch.id, anchor: .center) }
+                    player.seek(to: firstMatch.segment.start)
+                }
             }
         }
+    }
+
+    private static func highlight(_ text: String, _ needle: String) -> AttributedString {
+        var result = AttributedString(text)
+        guard !needle.isEmpty else { return result }
+        var from = result.startIndex
+        while from < result.endIndex,
+              let range = result[from...].range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) {
+            result[range].backgroundColor = Color.yellow.opacity(0.35)
+            from = range.upperBound
+        }
+        return result
     }
 }
 
@@ -538,10 +574,16 @@ private struct PeopleView: View {
                             get: { call.meta.speakerNames?[speaker] ?? "" },
                             set: { library.rename(speaker, to: $0, in: call.id) }
                         ), prompt: Text("Ім'я"))
+                        if (call.meta.recognized ?? []).contains(speaker) {
+                            Text("впізнано за голосом")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .help("Ім'я з попередніх дзвінків, де ти назвав цей голос. Виправ, якщо не так.")
+                        }
                     }
                 }
             } footer: {
-                Text("Імена потрапляють у розшифровку цього дзвінка, у .txt і в «Огляд» → «Люди». «Співрозмовник 1, 2…» — здогадка за голосом.")
+                Text("Імена потрапляють у розшифровку цього дзвінка, у .txt і в «Огляд» → «Люди». «Співрозмовник 1, 2…» — здогадка за голосом. Rozmova запам'ятовує названі голоси й сама підписує їх у наступних дзвінках.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

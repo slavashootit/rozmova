@@ -30,7 +30,11 @@ final class RecordingSession {
 
     var elapsed: Double { CACurrentMediaTime() - origin }
 
-    init(app: String, title: String?, autoStop: Bool) throws {
+    /// The call app, for recording its window.
+    private let appBundleID: String?
+
+    init(app: String, bundleID: String? = nil, title: String?, autoStop: Bool) throws {
+        appBundleID = bundleID
         let now = Date()
         folder = try Self.makeFolder(date: now)
         meta = SessionMeta(app: app, title: title, started: now, duration: 0,
@@ -45,7 +49,8 @@ final class RecordingSession {
         let systemWriter = try TrackWriter(url: layout.system, origin: origin)
         writers = [micWriter, systemWriter]
 
-        let system = SystemCapture(audio: systemWriter, screen: meta.hasScreen ? layout : nil, origin: origin)
+        let system = SystemCapture(audio: systemWriter, screen: meta.hasScreen ? layout : nil, origin: origin,
+                                   source: Prefs.captureSource, appBundleID: appBundleID)
         system.onFailure = { [weak self] error in
             Task { @MainActor in self?.onSystemCaptureFailure?(error) }
         }

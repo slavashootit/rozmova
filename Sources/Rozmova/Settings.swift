@@ -12,6 +12,19 @@ final class SettingsModel: ObservableObject {
     @Published var folderPath = ""
     @Published var hasLastRecording = false
     @Published var recordScreen = true { didSet { if !loading { Prefs.recordScreen = recordScreen } } }
+    /// CaptureSource.rawValue: "main", "display:<id>" or "window".
+    @Published var captureSource = "main" {
+        didSet { if !loading { Prefs.captureSource = CaptureSource(rawValue: captureSource) } }
+    }
+    @Published var hotKey = true {
+        didSet {
+            guard !loading else { return }
+            Prefs.hotKey = hotKey
+            NotificationCenter.default.post(name: .rozmovaHotKeyChanged, object: nil)
+        }
+    }
+    @Published var remindMeetings = true { didSet { if !loading { Prefs.remindMeetings = remindMeetings } } }
+    @Published var checkUpdates = true { didSet { if !loading { Prefs.checkUpdates = checkUpdates } } }
     @Published var cleanupDays = 14 {
         didSet {
             guard !loading else { return }
@@ -59,6 +72,10 @@ final class SettingsModel: ObservableObject {
         folderPath = (Prefs.recordingsFolder.path as NSString).abbreviatingWithTildeInPath
         hasLastRecording = Prefs.lastRecording.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
         recordScreen = Prefs.recordScreen
+        captureSource = Prefs.captureSource.rawValue
+        hotKey = Prefs.hotKey
+        remindMeetings = Prefs.remindMeetings
+        checkUpdates = Prefs.checkUpdates
         cleanupDays = Prefs.cleanupDays
         splitVoices = Prefs.splitVoices
         refreshUsage()
@@ -69,6 +86,15 @@ final class SettingsModel: ObservableObject {
         language = Prefs.language
         groqModel = Prefs.groqModel
         groqKey = Keychain.get(Keychain.groqKey) ?? ""
+    }
+
+    /// Displays other than the main one, for "Що знімати".
+    var otherDisplays: [DisplayChoice] {
+        NSScreen.screens.compactMap { screen in
+            guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+                  number.uint32Value != CGMainDisplayID() else { return nil }
+            return DisplayChoice(id: CaptureSource.display(number.uint32Value).rawValue, name: screen.localizedName)
+        }
     }
 
     func refreshUsage() {
@@ -114,6 +140,11 @@ final class SettingsModel: ObservableObject {
         Prefs.recordingsFolder = folder
         reload()
     }
+}
+
+struct DisplayChoice: Identifiable {
+    let id: String
+    let name: String
 }
 
 @MainActor
@@ -206,7 +237,17 @@ private struct RecordingsSettings: View {
             }
             Section {
                 Toggle("Записувати екран", isOn: $model.recordScreen)
-                Hint("30 кадрів/с, до 1920×1200, зі звуком розмови: до ~1,4 ГБ за годину, статичні слайди — менше.")
+                Picker("Що знімати", selection: $model.captureSource) {
+                    Text("Головний дисплей").tag(CaptureSource.mainDisplay.rawValue)
+                    ForEach(model.otherDisplays) { display in
+                        Text(display.name).tag(display.id)
+                    }
+                    Text("Вікно програми дзвінка").tag(CaptureSource.callWindow.rawValue)
+                }
+                .disabled(!model.recordScreen)
+                Hint(model.captureSource == CaptureSource.callWindow.rawValue
+                     ? "Знімає вікно Zoom, Meet чи іншої програми дзвінка на будь-якому моніторі: демонстрацію екрана співрозмовника видно завжди. Якщо вікна немає, пишеться головний дисплей."
+                     : "30 кадрів/с, до 1920×1200, зі звуком розмови: до ~1,4 ГБ за годину, статичні слайди — менше.")
             }
             Section {
                 LabeledContent("Зараз займають", value: model.technicalUsage)
@@ -255,6 +296,8 @@ private struct CallSettings: View {
                 Text("Нічого не робити").tag(AutoMode.off)
             }
             Toggle("Запускати при вході в систему", isOn: $model.launchAtLogin)
+            Toggle("Гаряча клавіша \(HotKey.recordShortcut): почати / зупинити запис", isOn: $model.hotKey)
+            Toggle("Перевіряти оновлення на GitHub", isOn: $model.checkUpdates)
             Section {
                 if model.ignoredApps.isEmpty {
                     Hint("Порожньо. Програма потрапляє сюди кнопкою «Це не дзвінок» у віконці.")
@@ -280,6 +323,7 @@ private struct CallSettings: View {
                 if calendar.hasAccess {
                     Label("Підключено", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
+                    Toggle("Нагадувати за хвилину до онлайн-зустрічі", isOn: $model.remindMeetings)
                 } else {
                     Button(calendar.canAsk ? "Підключити Календар" : "Відкрити налаштування приватності") {
                         if calendar.canAsk {
@@ -294,7 +338,8 @@ private struct CallSettings: View {
             } footer: {
                 Hint("""
                     Зустрічі видно в «Мої дзвінки» → «Календар», а дзвінок, що йшов під час події, \
-                    отримує її назву. Rozmova лише читає календар.
+                    отримує її назву. Онлайн-зустріч — подія з посиланням на Zoom, Meet, Teams чи \
+                    FaceTime. Rozmova лише читає календар.
                     """)
             }
         }

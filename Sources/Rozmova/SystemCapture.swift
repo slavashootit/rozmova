@@ -2,8 +2,9 @@ import AVFoundation
 import QuartzCore
 import ScreenCaptureKit
 
-/// Everything the Mac plays (the other side of the call, from any app) plus, optionally, the main
-/// display. One ScreenCaptureKit stream gives both, behind one permission:
+/// Everything the Mac plays (the other side of the call, from any app) plus, optionally, the
+/// screen: the main display, another display or the call app's window. The main display comes
+/// in the audio stream itself; anything else gets a second stream. One permission covers both:
 /// Screen & System Audio Recording.
 final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
     /// Called on a background queue if macOS stops the stream mid-recording.
@@ -14,14 +15,21 @@ final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     private let origin: Double
     private let audioQueue = DispatchQueue(label: "com.slava.rozmova.audio")
     private let videoQueue = DispatchQueue(label: "com.slava.rozmova.video")
+    private let source: CaptureSource
+    /// Whose window `.callWindow` records.
+    private let appBundleID: String?
     private var stream: SCStream?
+    private var videoStream: SCStream?
     private var screen: ScreenWriter?
 
     /// `screen` nil means audio only.
-    init(audio: TrackWriter, screen: Layout?, origin: Double) {
+    init(audio: TrackWriter, screen: Layout?, origin: Double, source: CaptureSource = .mainDisplay,
+         appBundleID: String? = nil) {
         self.audio = audio
         self.layout = screen
         self.origin = origin
+        self.source = source
+        self.appBundleID = appBundleID
         super.init()
     }
 
@@ -32,12 +40,29 @@ final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         let own = content.applications.filter { $0.processID == getpid() }
         let filter = SCContentFilter(display: display, excludingApplications: own, exceptingWindows: [])
 
+        // Another display or the call window: a video-only stream of its own.
+        if let layout, let video = Self.videoFilter(source, appBundleID: appBundleID, content: content, own: own) {
+            let size = ScreenWriter.size(forDisplayWidth: video.width, height: video.height)
+            let config = SCStreamConfiguration()
+            config.width = size.width
+            config.height = size.height
+            config.minimumFrameInterval = CMTime(value: 1, timescale: ScreenWriter.fps)
+            config.queueDepth = 8
+            config.showsCursor = true
+            screen = try ScreenWriter(video: layout.silentScreen, width: size.width, height: size.height,
+                                      origin: origin, queue: videoQueue)
+            let videoStream = SCStream(filter: video.filter, configuration: config, delegate: self)
+            try videoStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: videoQueue)
+            try await videoStream.startCapture()
+            self.videoStream = videoStream
+        }
+
         let config = SCStreamConfiguration()
         config.capturesAudio = true
         config.excludesCurrentProcessAudio = true
         config.sampleRate = 48_000
         config.channelCount = 2
-        if let layout {
+        if let layout, videoStream == nil {
             let size = ScreenWriter.size(forDisplayWidth: display.width, height: display.height)
             config.width = size.width
             config.height = size.height
@@ -57,7 +82,12 @@ final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: audioQueue)
         // Added even for audio-only, otherwise ScreenCaptureKit floods the log with dropped frames.
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: videoQueue)
-        try await stream.startCapture()
+        do {
+            try await stream.startCapture()
+        } catch {
+            try? await videoStream?.stopCapture()
+            throw error
+        }
         self.stream = stream
     }
 
@@ -65,8 +95,41 @@ final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
         if let stream {
             try? await stream.stopCapture()
         }
+        if let videoStream {
+            try? await videoStream.stopCapture()
+        }
         stream = nil
+        videoStream = nil
         await screen?.finish(at: CACurrentMediaTime())
+    }
+
+    /// The filter and size (in points) for a source other than the main display; nil means the
+    /// main display, also when the chosen display or window is gone.
+    private static func videoFilter(_ source: CaptureSource, appBundleID: String?, content: SCShareableContent,
+                                    own: [SCRunningApplication]) -> (filter: SCContentFilter, width: Int, height: Int)? {
+        switch source {
+        case .mainDisplay:
+            return nil
+        case .display(let id):
+            guard id != CGMainDisplayID(), let display = content.displays.first(where: { $0.displayID == id }) else {
+                return nil
+            }
+            let filter = SCContentFilter(display: display, excludingApplications: own, exceptingWindows: [])
+            return (filter, display.width, display.height)
+        case .callWindow:
+            guard let prefix = appBundleID?.lowercased() else { return nil }
+            let windows = content.windows.filter { window in
+                (window.owningApplication?.bundleIdentifier.lowercased().hasPrefix(prefix) ?? false)
+                    && window.windowLayer == 0 && window.isOnScreen
+                    && window.frame.width >= 300 && window.frame.height >= 200
+            }
+            guard let window = windows.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height })
+            else {
+                Log.info("No window of \(prefix) to record; recording the main display")
+                return nil
+            }
+            return (SCContentFilter(desktopIndependentWindow: window), Int(window.frame.width), Int(window.frame.height))
+        }
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
@@ -83,6 +146,11 @@ final class SystemCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecke
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
+        // The call window closing ends its video stream; the sound goes on in the other one.
+        if stream === videoStream {
+            Log.info("Screen capture stopped: \(error.localizedDescription)")
+            return
+        }
         Log.info("System capture stopped: \(error.localizedDescription)")
         onFailure?(error)
     }

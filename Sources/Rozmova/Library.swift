@@ -127,6 +127,21 @@ final class CallLibrary: ObservableObject {
         }
     }
 
+    /// While searching: the words around the first match, for the sidebar row.
+    func snippet(for call: CallRecord) -> String? {
+        let needle = query.trimmingCharacters(in: .whitespaces)
+        guard !needle.isEmpty else { return nil }
+        for piece in call.pieces {
+            guard let range = piece.text.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) else { continue }
+            let text = piece.text
+            let start = text.index(range.lowerBound, offsetBy: -30, limitedBy: text.startIndex) ?? text.startIndex
+            let end = text.index(range.upperBound, offsetBy: 60, limitedBy: text.endIndex) ?? text.endIndex
+            return (start > text.startIndex ? "…" : "") + text[start..<end].trimmingCharacters(in: .whitespaces)
+                + (end < text.endIndex ? "…" : "")
+        }
+        return nil
+    }
+
     /// Calls that started on this day, earliest first.
     func calls(onDay day: Date) -> [CallRecord] {
         calls.filter { Calendar.current.isDate($0.meta.started, inSameDayAs: day) }
@@ -161,6 +176,8 @@ final class CallLibrary: ObservableObject {
         var names = call.meta.speakerNames ?? [:]
         names[speaker] = name.trimmingCharacters(in: .whitespaces)
         call.meta.speakerNames = names
+        // Typed by you now, so it is no longer a guess and may teach later calls.
+        call.meta.recognized?.removeAll { $0 == speaker }
         calls[index] = call
         do {
             try call.meta.save(to: call.layout)

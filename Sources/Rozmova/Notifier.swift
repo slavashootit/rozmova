@@ -18,12 +18,15 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    func post(title: String, body: String, file: URL? = nil) {
+    /// `file` opens on click; `link` is a web address (a meeting to join, a release page).
+    func post(title: String, body: String, file: URL? = nil, link: URL? = nil) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         if let file {
             content.userInfo = ["file": file.path]
+        } else if let link {
+            content.userInfo = ["link": link.absoluteString]
         }
         post(id: UUID().uuidString, content: content)
     }
@@ -42,10 +45,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             didReceive response: UNNotificationResponse,
                                             withCompletionHandler completionHandler: @escaping () -> Void) {
-        let path = response.notification.request.content.userInfo["file"] as? String
+        let info = response.notification.request.content.userInfo
+        let url = (info["file"] as? String).map { URL(fileURLWithPath: $0) }
+            ?? (info["link"] as? String).flatMap { URL(string: $0) }
         Task { @MainActor in
-            if let path {
-                self.onOpen?(URL(fileURLWithPath: path))
+            if let url {
+                self.onOpen?(url)
             }
         }
         completionHandler()
