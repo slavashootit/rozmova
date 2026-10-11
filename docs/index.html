@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rozmova — запис і розшифровка дзвінків на Маці</title>
+<meta name="description" content="Rozmova сама помічає дзвінок у будь-якій програмі на Маці, записує обидві сторони й розшифровує розмову локально. Без бота в дзвінку, без лімітів і без підписки.">
+<meta property="og:title" content="Rozmova — запис і розшифровка дзвінків на Маці">
+<meta property="og:description" content="Zoom, Meet, Telegram, Slack — будь-яка програма. Розшифровка на твоєму Маці, без підписки. Відкритий код.">
+<meta property="og:image" content="https://slavashootit.github.io/rozmova/img/overview.webp">
+<meta name="theme-color" content="#0d0b16">
+<link rel="icon" href="icon.png">
+<style>
+  :root {
+    --bg: #f7f6fb; --surface: #ffffff; --text: #16141f; --muted: #605b75; --line: #e6e3ef;
+    --accent: #7c5cff; --accent2: #e0458f; --key: #f0eef7; --code: #15131f; --codetext: #ebe8f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d0b16; --surface: #16141f; --text: #eeecf7; --muted: #9e98b6; --line: #272439;
+      --key: #1f1c2e; --code: #0b0a12; --codetext: #ebe8f5;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0b16; --surface: #16141f; --text: #eeecf7; --muted: #9e98b6; --line: #272439;
+    --key: #1f1c2e; --code: #0b0a12; --codetext: #ebe8f5;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { width: min(1080px, 100% - 32px); margin-inline: auto; }
+
+  nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); background: color-mix(in srgb, var(--bg) 82%, transparent); border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; align-items: center; gap: 22px; height: 58px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); font-size: 18px; }
+  .logo:hover { text-decoration: none; }
+  .logo img { width: 28px; height: 28px; border-radius: 7px; }
+  nav .links { margin-left: auto; display: flex; gap: 22px; font-size: 14px; }
+  nav .links a { color: var(--muted); }
+  nav .links a:hover { color: var(--text); text-decoration: none; }
+  @media (max-width: 640px) { nav .links a:not(.gh) { display: none; } }
+
+  .hero { padding: 76px 0 40px; text-align: center; }
+  .pill { display: inline-block; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 13px; }
+  h1 { font-size: clamp(34px, 6vw, 62px); line-height: 1.06; letter-spacing: -0.03em; margin: 20px auto 16px; max-width: 15ch; }
+  h1 em { font-style: normal; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { font-size: 19px; color: var(--muted); max-width: 660px; margin: 0 auto 30px; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 12px; font-weight: 600; font-size: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+  .btn:hover { text-decoration: none; border-color: var(--accent); }
+  .btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; box-shadow: 0 8px 26px rgba(124, 92, 255, .35); }
+  .note { color: var(--muted); font-size: 14px; margin-top: 14px; }
+
+  .install { margin: 34px auto 0; max-width: 760px; text-align: left; }
+  .code { display: flex; align-items: center; gap: 12px; background: var(--code); color: var(--codetext); border-radius: 12px; padding: 10px 10px 10px 18px; font: 14px/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
+  .code span { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 6px 0; scrollbar-width: none; }
+  .code button { flex: none; border: 1px solid #3a3552; background: #211e33; color: #d3cfe6; border-radius: 8px; padding: 6px 12px; font: 13px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .code button:hover { background: #2b2742; }
+  .cap { color: var(--muted); font-size: 13px; margin: 0 0 8px 2px; }
+
+  /* ---------- hero illustration: a call and the "record?" prompt, drawn in CSS ---------- */
+  .stage { position: relative; aspect-ratio: 16 / 10; margin: 54px auto 0; max-width: 900px; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(30, 16, 60, .35); background: radial-gradient(120% 90% at 0% 0%, #3b2685 0%, transparent 55%), radial-gradient(90% 80% at 100% 100%, #8a2a6b 0%, transparent 60%), #14111f; color: #fff; text-align: left; font-size: clamp(8px, 1.15vw, 12px); }
+  .menubar { position: absolute; inset: 0 0 auto 0; height: 4.4%; min-height: 16px; background: rgba(10, 8, 20, .55); backdrop-filter: blur(8px); display: flex; align-items: center; gap: 14px; padding: 0 14px; }
+  .menubar .sp { margin-left: auto; }
+  .menubar .wave { display: inline-flex; align-items: center; gap: 2px; height: 1.2em; }
+  .menubar .wave i { display: block; width: 2px; border-radius: 1px; background: #fff; }
+  .call { position: absolute; left: 6%; top: 10%; width: 74%; height: 82%; border-radius: 10px; overflow: hidden; background: #17151f; box-shadow: 0 18px 50px rgba(0,0,0,.5); display: flex; flex-direction: column; }
+  .call .tb { height: 7%; min-height: 16px; display: flex; align-items: center; gap: 6px; padding: 0 10px; color: #8e89a3; }
+  .call .tb i { width: .8em; height: .8em; border-radius: 50%; background: #ff5f57; display: block; }
+  .call .tb i:nth-child(2) { background: #febc2e; } .call .tb i:nth-child(3) { background: #28c840; }
+  .call .tb span { margin: 0 auto; transform: translateX(-2em); }
+  .tiles { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1.2%; padding: 0 1.6%; }
+  .tile { position: relative; border-radius: 8px; display: grid; place-items: center; }
+  .tile.a { background: linear-gradient(160deg, #4a3570, #2c2142); }
+  .tile.b { background: linear-gradient(160deg, #26473f, #1b2b28); }
+  .av { width: 22%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 2.6em; color: #fff; }
+  .tile.a .av { background: linear-gradient(160deg, #ffb340, #ff8a00); animation: talk 1.4s ease-in-out infinite; }
+  .tile.b .av { background: linear-gradient(160deg, #5be07f, #2fbf5b); }
+  @keyframes talk { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 179, 64, .55); } 50% { box-shadow: 0 0 0 .9em rgba(255, 179, 64, 0); } }
+  .tile .nm { position: absolute; left: 3%; bottom: 4%; background: rgba(0,0,0,.6); border-radius: 5px; padding: 2px 7px; }
+  .self { position: absolute; right: 3%; bottom: 4%; width: 22%; aspect-ratio: 16 / 10; border-radius: 7px; background: linear-gradient(160deg, #24426b, #172437); display: grid; place-items: center; border: 1px solid rgba(255,255,255,.15); }
+  .self .av { width: 34%; font-size: 1.5em; background: linear-gradient(160deg, #4ea2ff, #1f6fe0); }
+  .ctrl { display: flex; justify-content: center; align-items: center; gap: 2.2em; padding: 2.2% 0; color: #c9c5d8; }
+  .ctrl .end { background: #e5484d; color: #fff; border-radius: 6px; padding: .35em 1em; font-weight: 600; }
+  .prompt { position: absolute; right: 2.4%; top: 7%; width: 34%; background: rgba(36, 33, 48, .94); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 1.4em; box-shadow: 0 18px 50px rgba(0,0,0,.55); animation: slide .9s cubic-bezier(.2,.8,.2,1) .4s both; }
+  @keyframes slide { from { transform: translateX(115%); opacity: 0; } to { transform: none; opacity: 1; } }
+  .prompt .hd { display: flex; gap: .9em; align-items: center; }
+  .prompt .ic { width: 3.2em; height: 3.2em; border-radius: .8em; background: linear-gradient(160deg, #4ea2ff, #1f6fe0); display: grid; place-items: center; flex: none; }
+  .prompt .ic svg { width: 1.6em; height: 1.6em; fill: #fff; }
+  .prompt b { display: block; font-size: 1.25em; }
+  .prompt small { color: #a9a4bd; font-size: 1em; }
+  .prompt .x { margin-left: auto; align-self: flex-start; width: 1.6em; height: 1.6em; border-radius: 50%; background: rgba(255,255,255,.1); display: grid; place-items: center; color: #aaa; }
+  .prompt .bt { display: grid; grid-template-columns: 1fr 1fr; gap: .6em; margin-top: 1.1em; }
+  .prompt .bt span { text-align: center; border-radius: 99px; padding: .65em 0; font-weight: 600; background: rgba(255,255,255,.12); }
+  .prompt .bt .rec { background: #ff3b30; }
+  .prompt .bt .rec::before { content: "● "; animation: bl 1s infinite alternate; }
+  .prompt .chk { margin-top: .9em; color: #b5b0c8; display: flex; align-items: center; gap: .5em; }
+  .prompt .chk i { width: 1.1em; height: 1.1em; border-radius: .25em; background: #0a84ff; display: grid; place-items: center; font-style: normal; font-size: .85em; color: #fff; }
+  @keyframes bl { to { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .prompt, .tile.a .av, .prompt .bt .rec::before { animation: none; } }
+  @media (max-width: 640px) { .menubar span.m { display: none; } .ctrl span:not(.end) { display: none; } .prompt { width: 46%; } }
+
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .tabs button { font: 600 14px -apple-system, system-ui, sans-serif; padding: 9px 16px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
+  .tabs button[aria-selected="true"] { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+  .panel[hidden] { display: none; }
+  .panel img { display: block; width: 100%; height: auto; border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(30, 16, 60, .30); background: #14111f; }
+  .caption { color: var(--muted); font-size: 15px; margin: 14px 0 0; max-width: 720px; }
+  .fine { color: var(--muted); font-size: 12px; margin-top: 18px; opacity: .8; }
+
+  section { padding: 64px 0 8px; }
+  h2 { font-size: clamp(26px, 4vw, 36px); letter-spacing: -0.02em; margin: 0 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 30px; max-width: 640px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .card .ic { font-size: 26px; margin-bottom: 10px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; counter-reset: f; }
+  .flow .card { position: relative; padding-top: 58px; }
+  .flow .card::before { counter-increment: f; content: counter(f); position: absolute; left: 20px; top: 18px; width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-weight: 700; display: grid; place-items: center; }
+
+  .files { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+  .term { background: var(--code); color: var(--codetext); border-radius: 14px; padding: 18px 20px; font: 13.5px/1.7 ui-monospace, "SF Mono", Menlo, monospace; overflow-x: auto; white-space: pre; }
+  .term .c { color: #8c86a6; }
+  .term .t { color: #9db4ff; }
+  .term .y { color: #4ea2ff; } .term .o { color: #ffb340; } .term .g { color: #5be07f; }
+  .files h3 { margin: 0 0 10px; font-size: 17px; }
+  .files p { color: var(--muted); font-size: 15px; margin: 12px 0 0; }
+
+  .steps { counter-reset: s; display: grid; gap: 12px; padding: 0; list-style: none; max-width: 760px; }
+  .steps li { counter-increment: s; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px 16px 62px; position: relative; }
+  .steps li::before { content: counter(s); position: absolute; left: 18px; top: 15px; width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-weight: 700; display: grid; place-items: center; }
+  .steps b { display: block; }
+  .steps span { color: var(--muted); font-size: 15px; }
+  code { font: 14px ui-monospace, "SF Mono", Menlo, monospace; background: var(--key); border-radius: 6px; padding: 1px 6px; }
+
+  details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; margin-bottom: 10px; max-width: 760px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { color: var(--muted); margin: 10px 0 0; font-size: 15px; }
+
+  .cmp { width: 100%; max-width: 760px; border-collapse: collapse; font-size: 15px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .cmp th, .cmp td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); }
+  .cmp th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .cmp tr:last-child td { border-bottom: 0; }
+  @media (max-width: 640px) { .cmp { font-size: 13.5px; } .cmp th, .cmp td { padding: 9px 8px; } .cmp td:first-child { width: 38%; } }
+
+  footer { margin-top: 72px; border-top: 1px solid var(--line); padding: 28px 0 44px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 22px; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="logo" href="#top"><img src="icon.png" alt="">Rozmova</a>
+    <div class="links">
+      <a href="#features">Функції</a>
+      <a href="#demo">Як виглядає</a>
+      <a href="#files">Файли</a>
+      <a href="#install">Встановлення</a>
+      <a href="#faq">Питання</a>
+      <a class="gh" href="https://github.com/slavashootit/rozmova">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <span class="pill">Безкоштовно · відкритий код · macOS 14+ · v0.9.0</span>
+    <h1>Записує дзвінки <em>без бота й підписки</em></h1>
+    <p class="lead">Rozmova сама помічає дзвінок у будь-якій програмі: Zoom, Google Meet у браузері, Telegram, Slack, FaceTime. Пише твій голос і співрозмовників, за бажанням екран, а потім розшифровує розмову прямо на твоєму Маці. Нічого не йде в хмару.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/slavashootit/rozmova/releases/latest/download/Rozmova.dmg">⬇ Скачати для Mac</a>
+      <a class="btn" href="https://github.com/slavashootit/rozmova">Код на GitHub</a>
+    </div>
+    <p class="note">Для Mac на Apple Silicon (M1 і новіші), macOS 14 Sonoma або новіша.</p>
+
+    <div class="install">
+      <p class="cap">Або одним рядком у Терміналі:</p>
+      <div class="code"><span id="cmd">curl -fsSL https://slavashootit.github.io/rozmova/install.sh | bash</span><button id="copy" type="button">Копіювати</button></div>
+    </div>
+
+    <div class="stage" role="img" aria-label="Ілюстрація: іде відеодзвінок, а Rozmova у правому верхньому куті питає, чи записати його">
+      <div class="menubar">
+        <span style="font-size:1.3em"></span><b>Відеодзвінок</b><span class="m">Зустріч</span><span class="m">Вигляд</span><span class="m">Вікно</span>
+        <span class="sp wave" aria-hidden="true"><i style="height:35%"></i><i style="height:70%"></i><i style="height:100%"></i><i style="height:60%"></i><i style="height:30%"></i></span>
+        <span>Нд 11 жовт. 15:02</span>
+      </div>
+      <div class="call">
+        <div class="tb"><i></i><i></i><i></i><span>Зустріч</span></div>
+        <div class="tiles">
+          <div class="tile a"><div class="av">О</div><span class="nm">Олена</span></div>
+          <div class="tile b"><div class="av">А</div><span class="nm">Андрій</span><div class="self"><div class="av">Я</div></div></div>
+        </div>
+        <div class="ctrl"><span>🎙 Звук</span><span>📷 Відео</span><span>👥 Учасники</span><span>💬 Чат</span><span class="end">Завершити</span></div>
+      </div>
+      <div class="prompt">
+        <div class="hd">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM17 10l4-2.5v9L17 14z"/></svg></div>
+          <div><b>Дзвінок у Zoom</b><small>Щотижневий синк команди</small></div>
+          <span class="x">✕</span>
+        </div>
+        <div class="bt"><span class="rec">Записати</span><span>Не зараз</span></div>
+        <div class="chk"><i>✓</i>Разом із записом екрана</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Усе для запису розмов</h2>
+    <p class="sub">Те, за що сервіси-нотатники беруть щомісячну оплату, в одній легкій програмі в меню-барі.</p>
+    <div class="grid">
+      <div class="card"><div class="ic">🔔</div><h3>Сама помічає дзвінок</h3><p>Щойно програма бере мікрофон для розмови, справа зверху виїжджає віконце «Записати?». Фокус у дзвінка не забирає.</p></div>
+      <div class="card"><div class="ic">🌐</div><h3>Будь-яка програма</h3><p>Zoom, Meet і Teams у браузері, Telegram, Slack, FaceTime, WhatsApp, Discord. Бот у дзвінок не заходить, ніхто нічого не помітить.</p></div>
+      <div class="card"><div class="ic">🎧</div><h3>Обидві сторони окремо</h3><p>Твій мікрофон і звук системи пишуться на різні доріжки. У розшифровці точно видно, де говориш ти.</p></div>
+      <div class="card"><div class="ic">🗣️</div><h3>Розрізняє голоси</h3><p>Інших учасників ділить за голосом: «Співрозмовник 1», «Співрозмовник 2». Імена можна вписати, і вони потраплять у текст.</p></div>
+      <div class="card"><div class="ic">🧠</div><h3>Розшифровка на Маці</h3><p>NVIDIA Parakeet на Neural Engine: 25 європейських мов, зокрема українська. Безкоштовно й без інтернету. Хочеш хмару — є Groq.</p></div>
+      <div class="card"><div class="ic">🖥️</div><h3>Запис екрана</h3><p>Якщо треба, 30 кадрів/с зі звуком розмови. Зручно, коли показували презентацію, макет чи демо.</p></div>
+      <div class="card"><div class="ic">🗂️</div><h3>«Мої дзвінки»</h3><p>Усі розмови в одному вікні: пошук по тексту всіх дзвінків, плеєр, клік на репліку вмикає запис із цього місця.</p></div>
+      <div class="card"><div class="ic">📊</div><h3>Статистика без нейронок</h3><p>Хто скільки говорив, твій темп, запитання, перебивання, паузи, слова-паразити. Огляд за тиждень, місяць, рік.</p></div>
+      <div class="card"><div class="ic">🧹</div><h3>Прибирає за собою</h3><p>Технічні файли видаляються самі через 2 тижні. Відео, аудіо й розшифровки лишаються назавжди.</p></div>
+      <div class="card"><div class="ic">🔒</div><h3>Приватність</h3><p>Ні акаунтів, ні аналітики, ні хмари. Записи лежать у теці на твоєму Маці й нікуди не відправляються.</p></div>
+      <div class="card"><div class="ic">♾️</div><h3>Без лімітів</h3><p>Скільки завгодно дзвінків будь-якої довжини. Ні лічильника хвилин, ні платного плану.</p></div>
+      <div class="card"><div class="ic">🪶</div><h3>Легка</h3><p>Живе в меню-барі без іконки в Доку. Розшифровка кількох КБ на дзвінок: історію можна тримати роками.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>Як це працює</h2>
+    <p class="sub">Від дзвінка до тексту без жодного клацання, крім «Записати».</p>
+    <div class="flow">
+      <div class="card"><h3>Помічає</h3><p>Раз на 2 секунди дивиться, яка програма тримає мікрофон. Програми для диктування (Superwhisper, Wispr Flow) дзвінком не вважаються.</p></div>
+      <div class="card"><h3>Пише</h3><p>Мікрофон і звук системи на одній шкалі часу, плюс екран, якщо ввімкнено. Дзвінок закінчився — запис зупиняється сам.</p></div>
+      <div class="card"><h3>Розшифровує</h3><p>За кілька хвилин приходить сповіщення «Розшифровка готова»: текст із часом і тим, хто говорить.</p></div>
+      <div class="card"><h3>Рахує</h3><p>Статистика рахується з таймкодів слів, без мовних моделей. Усе одразу видно в «Моїх дзвінках».</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="wrap">
+    <h2>Як це виглядає</h2>
+    <p class="sub">Вікно «Мої дзвінки». Натискай вкладки.</p>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-p="p1">Огляд</button>
+      <button role="tab" aria-selected="false" data-p="p2">Дзвінок</button>
+      <button role="tab" aria-selected="false" data-p="p3">Статистика</button>
+    </div>
+    <div class="panel" id="p1" role="tabpanel">
+      <img src="img/overview.webp" width="1800" height="1125" alt="Огляд за місяць: кількість дзвінків, години, твоя частка розмови, темп, графіки активності, програм і днів тижня, люди" loading="lazy">
+      <p class="caption">Огляд за тиждень, місяць чи рік: скільки часу в дзвінках, у яких програмах, як змінюється твій темп і з ким говориш найчастіше.</p>
+    </div>
+    <div class="panel" id="p2" role="tabpanel" hidden>
+      <img src="img/call.webp" width="1800" height="1125" alt="Сторінка дзвінка: плеєр із записом екрана й розшифровка з часом і іменами" loading="lazy">
+      <p class="caption">Відео екрана зі звуком і розшифровка поруч. Клік на час репліки вмикає запис саме з цього місця.</p>
+    </div>
+    <div class="panel" id="p3" role="tabpanel" hidden>
+      <img src="img/stats.webp" width="1800" height="1125" alt="Статистика дзвінка: частка розмови кожного, темп, запитання, перебивання, паузи, слова-паразити, графік темпу" loading="lazy">
+      <p class="caption">Хто скільки говорив, твій темп по хвилинах і моменти, коли ти розганявся, запитання, перебивання, найдовший монолог і слова-паразити.</p>
+    </div>
+    <p class="fine">Зображення — макети інтерфейсу з вигаданими даними; у програмі деталі можуть відрізнятись.</p>
+  </div>
+</section>
+
+<section id="files">
+  <div class="wrap">
+    <h2>Що лишається після дзвінка</h2>
+    <p class="sub">Звичайні файли, які відкриваються будь-чим. Аудіо чи текст можна закинути куди завгодно.</p>
+    <div class="files">
+      <div>
+        <h3>Відео й аудіо</h3>
+<div class="term"><span class="c">~/Documents/Calls/</span>
+└─ <span class="t">Call_2026-10-10_15-02/</span>
+   ├─ Call_2026-10-10_15-02.mp4  <span class="c"># екран зі звуком</span>
+   └─ Call_2026-10-10_15-02.m4a  <span class="c"># обидві сторони</span></div>
+        <p>Тека змінюється в налаштуваннях, можна на зовнішній диск.</p>
+      </div>
+      <div>
+        <h3>Розшифровка</h3>
+<div class="term">[00:18:24] <span class="o">Олена</span>: А скільки буде тривати?
+
+[00:18:41] <span class="y">Я</span>: Знімаємо одну тридцятку,
+           з неї ріжемо пʼятнадцять і шість.
+
+[00:19:07] <span class="g">Андрій</span>: Тоді закладаємо один день?</div>
+        <p>Зберігається в програмі назавжди, кілька КБ на дзвінок.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="wrap">
+    <h2>Чесно про різницю</h2>
+    <p class="sub">Rozmova не робить самарі нейронкою: текст можна закинути в будь-який чат-бот сам. Зате ось що виходить.</p>
+    <table class="cmp">
+      <tr><th></th><th>Rozmova</th><th>Типовий сервіс-нотатник</th></tr>
+      <tr><td>Ціна</td><td>Безкоштовно</td><td>Підписка</td></tr>
+      <tr><td>Бот приєднується до дзвінка</td><td>Ні</td><td>Часто так</td></tr>
+      <tr><td>Будь-яка програма для дзвінків</td><td>✓</td><td>Зазвичай кілька популярних</td></tr>
+      <tr><td>Ліміт хвилин</td><td>Немає</td><td>На безкоштовному плані є</td></tr>
+      <tr><td>Де лежать записи</td><td>На твоєму Маці</td><td>У хмарі сервісу</td></tr>
+      <tr><td>Розшифровка без інтернету</td><td>✓</td><td>—</td></tr>
+      <tr><td>Самарі й задачі від ШІ</td><td>—</td><td>✓</td></tr>
+      <tr><td>Відкритий код</td><td>✓</td><td>—</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>Встановлення</h2>
+    <p class="sub">Потрібні macOS 14 (Sonoma) або новіша і Mac на Apple Silicon (M1 і новіші).</p>
+    <ol class="steps">
+      <li><b>Завантаж і перетягни в «Програми»</b><span>Відкрий <code>Rozmova.dmg</code> і перетягни Rozmova на папку Applications. Або встанови одним рядком у Терміналі, команда вгорі сторінки.</span></li>
+      <li><b>Перший запуск</b><span>Програма не нотаризована Apple, тож macOS спершу її заблокує. Системні параметри → Приватність і безпека → «Усе одно відкрити». Або одним рядком: <code>xattr -dr com.apple.quarantine /Applications/Rozmova.app</code></span></li>
+      <li><b>Дозволи</b><span>Мікрофон — щоб писати твій голос. Запис екрана й системного звуку — щоб писати співрозмовників (macOS спитає на першому записі, потім перезапусти програму). Сповіщення — щоб бачити «Розшифровка готова».</span></li>
+      <li><b>Користуйся</b><span>Іконка з хвилькою з'явиться в рядку меню. Почни будь-який дзвінок, і Rozmova спитає, чи записувати. Перша розшифровка один раз скачає модель, приблизно 0,6 ГБ.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Питання</h2>
+    <details><summary>Чому macOS каже, що програму не можна відкрити?</summary><p>Rozmova безкоштовна й не має платного сертифіката розробника Apple, тож не нотаризована. Один раз відкрий через Системні параметри → Приватність і безпека → «Усе одно відкрити» або виконай <code>xattr -dr com.apple.quarantine /Applications/Rozmova.app</code>.</p></details>
+    <details><summary>Чи йде щось в інтернет?</summary><p>Ні, якщо рушій розпізнавання — Parakeet (за замовчуванням): інтернет потрібен лише один раз, щоб скачати модель. Якщо в налаштуваннях обрати Groq, аудіо відправляється на розшифровку в Groq з твоїм ключем.</p></details>
+    <details><summary>Не пишеться звук співрозмовника</summary><p>Потрібен дозвіл «Запис екрана й системного звуку»: Системні параметри → Приватність і безпека → увімкни Rozmova й перезапусти програму.</p></details>
+    <details><summary>Віконце з'являється, коли я диктую текст</summary><p>Популярні програми для диктування Rozmova пропускає сама. Для решти натисни у віконці «Це не дзвінок», і ця програма більше не потурбує.</p></details>
+    <details><summary>Чи записує, коли в дзвінку ввімкнений mute?</summary><p>Так: Rozmova пише мікрофон напряму, тож у розшифровку може потрапити те, чого співрозмовники не чули. Пам'ятай про це.</p></details>
+    <details><summary>Наскільки точно розрізняються співрозмовники?</summary><p>«Я» — завжди точно, бо це окрема доріжка. Інших програма ділить за голосом, і це здогадка: схожі голоси можуть злитися в один. Найчистіше виходить у навушниках.</p></details>
+    <details><summary>А це взагалі законно — записувати дзвінки?</summary><p>Залежить від країни, але правило просте: попереджай людей, що дзвінок записується.</p></details>
+    <details><summary>Як зібрати самому?</summary><p>Потрібні Command Line Tools зі Swift 6 (<code>xcode-select --install</code>). Далі <code>git clone https://github.com/slavashootit/rozmova.git &amp;&amp; cd rozmova &amp;&amp; ./build.sh</code>.</p></details>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Rozmova · MIT · зроблено, щоб не платити за підписку</span>
+    <span><a href="https://github.com/slavashootit/rozmova">GitHub</a> · <a href="https://github.com/slavashootit/rozmova/releases">Усі версії</a> · <a href="https://github.com/slavashootit/rozmova/issues">Проблеми</a></span>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('.tabs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.tabs button').forEach(function (x) { x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
+      document.querySelectorAll('.panel').forEach(function (p) { p.hidden = p.id !== b.dataset.p; });
+    });
+  });
+  document.getElementById('copy').addEventListener('click', function () {
+    var btn = this;
+    var text = document.getElementById('cmd').textContent;
+    var done = function () { btn.textContent = 'Скопійовано'; setTimeout(function () { btn.textContent = 'Копіювати'; }, 1600); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, done);
+    } else {
+      var r = document.createRange(); r.selectNodeContents(document.getElementById('cmd'));
+      var s = getSelection(); s.removeAllRanges(); s.addRange(r); try { document.execCommand('copy'); } catch (e) {} s.removeAllRanges(); done();
+    }
+  });
+</script>
+</body>
+</html>

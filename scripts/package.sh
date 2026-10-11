@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build build/Rozmova.app and build/Rozmova-<version>.dmg. Used by the release workflow and
+# Build build/Rozmova.app and build/Rozmova.dmg. Used by the release workflow and
 # works locally too: ./scripts/package.sh [version]
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -28,5 +28,5 @@ STAGE=build/dmg
 mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "Rozmova" -srcfolder "$STAGE" -ov -format UDZO "build/Rozmova-$VERSION.dmg"
-echo "Built: build/Rozmova-$VERSION.dmg"
+hdiutil create -volname "Rozmova" -srcfolder "$STAGE" -ov -format UDZO build/Rozmova.dmg
+echo "Built: build/Rozmova.dmg ($VERSION)"

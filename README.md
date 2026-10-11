@@ -7,6 +7,8 @@
 **Записує дзвінки з будь-якої програми на Маці й розшифровує їх прямо на ньому.**<br>
 Без бота в дзвінку, без лімітів на хвилини й без підписки.
 
+**[slavashootit.github.io/rozmova](https://slavashootit.github.io/rozmova/)**
+
 [![Завантажити](https://img.shields.io/github/v/release/slavashootit/rozmova?label=%D0%97%D0%B0%D0%B2%D0%B0%D0%BD%D1%82%D0%B0%D0%B6%D0%B8%D1%82%D0%B8&style=for-the-badge&color=8b3dff)](https://github.com/slavashootit/rozmova/releases/latest)
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
@@ -78,8 +80,13 @@
 
 ## Встановлення
 
-1. Завантаж **Rozmova-….dmg** зі сторінки [Releases](https://github.com/slavashootit/rozmova/releases/latest).
+1. Завантаж [**Rozmova.dmg**](https://github.com/slavashootit/rozmova/releases/latest/download/Rozmova.dmg).
 2. Відкрий його й перетягни **Rozmova** у **Програми**.
+
+   Або все одним рядком у Терміналі (скачає, покладе в «Програми» й запустить):
+   ```bash
+   curl -fsSL https://slavashootit.github.io/rozmova/install.sh | bash
+   ```
 3. Програма не нотаризована Apple (для цього потрібен платний акаунт розробника), тож під час
    першого запуску macOS її заблокує. Відкрий **Системні параметри → Приватність і безпека**,
    прогорни вниз і натисни **«Усе одно відкрити»**. Або одною командою в Терміналі:
