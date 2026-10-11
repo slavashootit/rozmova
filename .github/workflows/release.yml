@@ -2,6 +2,7 @@ name: Release
 
 # Builds the DMG and publishes it as a GitHub release. Runs on a pushed tag like v1.0.0,
 # or by hand ("Run workflow"), taking the version from Info.plist and creating the tag.
+# Running it again for a version that is already released rebuilds that release in place.
 on:
   push:
     tags: ["v*"]
@@ -36,7 +37,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v$VERSION" build/*.dmg \
-            --target "$GITHUB_SHA" \
-            --title "Rozmova $VERSION" \
-            --notes-file .github/release-notes.md
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            # Same version built again: move the tag to this commit and replace the DMG.
+            git tag -f "v$VERSION" "$GITHUB_SHA"
+            git push -f origin "refs/tags/v$VERSION"
+            gh release upload "v$VERSION" build/*.dmg --clobber
+          else
+            gh release create "v$VERSION" build/*.dmg \
+              --target "$GITHUB_SHA" \
+              --title "Rozmova $VERSION" \
+              --notes-file .github/release-notes.md
+          fi
