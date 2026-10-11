@@ -165,6 +165,13 @@ cd rozmova
 DMG збирається командою `./scripts/package.sh`. Релізи на GitHub збираються автоматично,
 щойно з'являється тег `v*`.
 
+Для розробки: віконце «Записати?» без справжнього дзвінка й лог програми.
+
+```bash
+pkill -x Rozmova; open ~/Applications/Rozmova.app --args --demo-prompt
+log stream --predicate 'subsystem == "com.slava.rozmova"'
+```
+
 ## Чесно про обмеження
 
 - Rozmova пише твій мікрофон навіть тоді, коли в програмі дзвінка ввімкнений mute. Тож у
