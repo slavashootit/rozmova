@@ -168,7 +168,7 @@ DMG збирається командою `./scripts/package.sh`. Релізи �
 Для розробки: віконце «Записати?» без справжнього дзвінка й лог програми.
 
 ```bash
-pkill -x Rozmova; open ~/Applications/Rozmova.app --args --demo-prompt
+pkill -x Rozmova; sleep 1; open -a Rozmova --args --demo-prompt
 log stream --predicate 'subsystem == "com.slava.rozmova"'
 ```
 
