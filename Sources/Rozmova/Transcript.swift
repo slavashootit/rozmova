@@ -7,7 +7,7 @@ enum Transcript {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
         var header = "\(name)\n\(formatter.string(from: meta.started)) · \(meta.app)"
-        if let title = meta.title, !title.isEmpty, title != meta.app {
+        if let title = meta.event?.title ?? meta.title, !title.isEmpty, title != meta.app {
             header += " · \(title)"
         }
         header += " · \(Int((meta.duration / 60).rounded())) хв"

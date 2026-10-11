@@ -18,7 +18,11 @@ enum Pipeline {
             }
         }
 
-        let meta = try SessionMeta.load(from: layout)
+        var meta = try SessionMeta.load(from: layout)
+        if meta.event == nil, let link = await CalendarEvents.shared.link(forCallAt: meta.started, duration: meta.duration) {
+            meta.event = link
+            try meta.save(to: layout)
+        }
         let result = try await Transcriber.transcribe(layout, language: meta.language, engine: Prefs.engine)
         try SegmentsFile.save(result.pieces, to: layout)
         try Transcript.write(meta: meta, layout: layout, turns: result.turns)

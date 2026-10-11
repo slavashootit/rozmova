@@ -59,12 +59,17 @@ struct WeekGroup: Identifiable {
 @MainActor
 final class CallLibrary: ObservableObject {
     @Published private(set) var calls: [CallRecord] = []
-    /// Sidebar row that shows the overview instead of a call.
+    /// Sidebar rows that show the overview or the calendar instead of a call.
     static let overviewID = "overview"
+    static let calendarID = "calendar"
 
     @Published var query = ""
     @Published var selection: String? = CallLibrary.overviewID
     @Published var period = Period.month
+    /// Any date in the month the calendar shows.
+    @Published var month = Date()
+    /// The day whose calls and meetings are listed under the calendar.
+    @Published var day: Date? = Date()
 
     /// Set by AppDelegate: transcribe a call again (while its separate tracks still exist).
     var onReprocess: (Layout) -> Void = { _ in }
@@ -83,9 +88,49 @@ final class CallLibrary: ObservableObject {
             return CallRecord(id: layout.name, meta: meta, pieces: SegmentsFile.load(layout))
         }
         .sorted { $0.meta.started > $1.meta.started }
-        if selection == nil || (selection != Self.overviewID && !calls.contains(where: { $0.id == selection })) {
+        linkEvents()
+        let pages = [Self.overviewID, Self.calendarID]
+        if selection == nil || (!pages.contains(selection!) && !calls.contains(where: { $0.id == selection })) {
             selection = Self.overviewID
         }
+    }
+
+    /// Names calls recorded before Calendar access (or before this version) after their events.
+    /// One Calendar query per month, not per call.
+    private func linkEvents() {
+        let calendar = CalendarEvents.shared
+        guard calendar.hasAccess else { return }
+        let unlinked = calls.indices.filter { calls[$0].meta.event == nil }
+        let months = Dictionary(grouping: unlinked) { index in
+            Calendar.current.dateInterval(of: .month, for: calls[index].meta.started)?.start ?? .distantPast
+        }
+        for indices in months.values {
+            let from = indices.map { calls[$0].meta.started }.min() ?? Date()
+            let to = indices.map { calls[$0].meta.started.addingTimeInterval(max(calls[$0].meta.duration, 60)) }.max() ?? from
+            let events = calendar.events(from: from, to: to)
+            guard !events.isEmpty else { continue }
+            for index in indices {
+                var call = calls[index]
+                guard let event = CalendarEvents.best(start: call.meta.started, duration: call.meta.duration,
+                                                      among: events) else { continue }
+                call.meta.event = event.link
+                do {
+                    try call.meta.save(to: call.layout)
+                    if !call.pieces.isEmpty {
+                        try Transcript.write(meta: call.meta, layout: call.layout, turns: call.turns)
+                    }
+                } catch {
+                    Log.info("Linking \(call.id) to an event failed: \(error.localizedDescription)")
+                }
+                calls[index] = CallRecord(id: call.id, meta: call.meta, pieces: call.pieces)
+            }
+        }
+    }
+
+    /// Calls that started on this day, earliest first.
+    func calls(onDay day: Date) -> [CallRecord] {
+        calls.filter { Calendar.current.isDate($0.meta.started, inSameDayAs: day) }
+            .sorted { $0.meta.started < $1.meta.started }
     }
 
     var weeks: [WeekGroup] {

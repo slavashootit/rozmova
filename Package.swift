@@ -13,8 +13,8 @@ let package = Package(
             name: "Rozmova",
             dependencies: [.product(name: "FluidAudio", package: "FluidAudio")],
             path: "Sources/Rozmova",
-            // Not autolinked by `swift build`; without it the player crashes at runtime.
-            linkerSettings: [.linkedFramework("AVKit")]
+            // Not autolinked by `swift build`; without AVKit the player crashes at runtime.
+            linkerSettings: [.linkedFramework("AVKit"), .linkedFramework("EventKit")]
         )
     ]
 )

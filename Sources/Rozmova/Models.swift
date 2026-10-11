@@ -65,9 +65,12 @@ struct SessionMeta: Codable {
     var mediaFolder: String?
     /// "Співрозмовник 1" → "Роман", set in the dashboard.
     var speakerNames: [String: String]?
+    /// The macOS Calendar event the call happened in, matched by time.
+    var event: EventLink?
 
+    /// The calendar event names a call better than a window title like "Zoom Meeting".
     var displayTitle: String {
-        title ?? "Дзвінок у \(app)"
+        event?.title ?? title ?? "Дзвінок у \(app)"
     }
 
     static func load(from layout: Layout) throws -> SessionMeta {
@@ -83,6 +86,14 @@ struct SessionMeta: Codable {
         try FileManager.default.createDirectory(at: layout.history, withIntermediateDirectories: true)
         try encoder.encode(self).write(to: layout.meta, options: .atomic)
     }
+}
+
+/// A copy of the calendar event, so the call keeps its name even if the event is deleted.
+struct EventLink: Codable, Equatable {
+    var title: String
+    var start: Date
+    var end: Date
+    var calendar: String?
 }
 
 enum SegmentsFile {

@@ -78,6 +78,8 @@ struct CabinetView: View {
             Group {
                 if let call = library.selected {
                     CallDetail(call: call, library: library, player: player)
+                } else if library.selection == CallLibrary.calendarID {
+                    CalendarView(library: library, events: CalendarEvents.shared)
                 } else {
                     OverviewView(library: library)
                 }
@@ -98,6 +100,8 @@ private struct CallList: View {
         List(selection: $library.selection) {
             Label("Огляд", systemImage: "chart.bar.xaxis")
                 .tag(CallLibrary.overviewID)
+            Label("Календар", systemImage: "calendar")
+                .tag(CallLibrary.calendarID)
             ForEach(library.weeks) { week in
                 Section(week.id) {
                     ForEach(week.calls) { call in
@@ -346,6 +350,10 @@ private struct CallDetail: View {
                     if call.speakers.count > 1 {
                         Chip(icon: "person.2", text: "\(call.speakers.count) учасн.")
                     }
+                    if let calendar = call.meta.event?.calendar {
+                        Chip(icon: "calendar.badge.checkmark", text: calendar)
+                            .help("Назва дзвінка — з події в Календарі macOS")
+                    }
                 }
             }
             Spacer()
@@ -544,7 +552,7 @@ private struct PeopleView: View {
 
 // MARK: - Building blocks
 
-private struct Card<Content: View>: View {
+struct Card<Content: View>: View {
     let title: String
     let subtitle: String?
     let content: Content
@@ -601,7 +609,7 @@ private struct Tile: View {
     }
 }
 
-private struct Chip: View {
+struct Chip: View {
     let icon: String
     let text: String
 
@@ -614,7 +622,7 @@ private struct Chip: View {
     }
 }
 
-private struct Avatar: View {
+struct Avatar: View {
     let name: String
     let color: Color
     let size: CGFloat
@@ -629,7 +637,7 @@ private struct Avatar: View {
 }
 
 /// A colored rounded square with a symbol for the call app.
-private struct AppBadge: View {
+struct AppBadge: View {
     let app: String
     let size: CGFloat
 

@@ -245,6 +245,7 @@ private struct RecordingsSettings: View {
 
 private struct CallSettings: View {
     @ObservedObject var model: SettingsModel
+    @ObservedObject var calendar = CalendarEvents.shared
 
     var body: some View {
         Form {
@@ -274,6 +275,27 @@ private struct CallSettings: View {
                 Text("Не вважати дзвінком")
             } footer: {
                 Hint("Програми для диктування (Superwhisper, MacWhisper, Wispr Flow…) пропускаються завжди.")
+            }
+            Section {
+                if calendar.hasAccess {
+                    Label("Підключено", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                } else {
+                    Button(calendar.canAsk ? "Підключити Календар" : "Відкрити налаштування приватності") {
+                        if calendar.canAsk {
+                            Task { await calendar.requestAccess() }
+                        } else {
+                            calendar.openPrivacySettings()
+                        }
+                    }
+                }
+            } header: {
+                Text("Календар macOS")
+            } footer: {
+                Hint("""
+                    Зустрічі видно в «Мої дзвінки» → «Календар», а дзвінок, що йшов під час події, \
+                    отримує її назву. Rozmova лише читає календар.
+                    """)
             }
         }
         .formStyle(.grouped)

@@ -84,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             startRecording(call: call)
         default:
             pendingCall = call
-            prompt.show(call: call, title: KnownApps.meetingTitle(for: call))
+            prompt.show(call: call, title: CalendarEvents.shared.current()?.title ?? KnownApps.meetingTitle(for: call))
         }
     }
 

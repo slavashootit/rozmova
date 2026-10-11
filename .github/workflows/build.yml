@@ -1,0 +1,15 @@
+name: Build
+
+# Compiles the app on every push and pull request, so a broken build shows up before a release.
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift build
+        run: swift build -c release
