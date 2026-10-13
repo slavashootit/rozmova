@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The call the "record?" prompt is about.
     private var pendingCall: CallApp?
     private var tick: Timer?
+    private var statusSymbol: String?
     /// Recordings are processed one at a time: speech recognition already uses the whole chip.
     private var processing: Task<Void, Never>?
     private var processingCount = 0
@@ -275,17 +276,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updateStatus() {
         guard let button = statusItem?.button else { return }
         let symbol: String
+        let tint: NSColor?
+        let title: String
         if let session {
             symbol = "record.circle.fill"
-            button.contentTintColor = .systemRed
-            button.title = " " + Timecode.short(session.elapsed)
+            tint = .systemRed
+            title = " " + Timecode.short(session.elapsed)
         } else {
             symbol = processingCount > 0 ? "text.bubble" : "waveform"
-            button.contentTintColor = nil
-            button.title = ""
+            tint = nil
+            title = ""
         }
-        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Rozmova")
-        button.imagePosition = .imageLeading
+        // Called every second: touch the menu bar only when something changed.
+        if button.title != title { button.title = title }
+        if button.contentTintColor != tint { button.contentTintColor = tint }
+        if statusSymbol != symbol {
+            statusSymbol = symbol
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Rozmova")
+            button.imagePosition = .imageLeading
+        }
     }
 
     private func statusLine() -> String {

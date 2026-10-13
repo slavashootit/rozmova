@@ -88,6 +88,8 @@ final class CallPrompt {
             MainActor.assumeIsolated {
                 if self?.generation == shown {
                     panel.orderOut(nil)
+                    // Drop the view: its phase animator keeps redrawing an ordered-out panel.
+                    panel.contentView = nil
                 }
             }
         })
