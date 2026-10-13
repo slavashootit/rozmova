@@ -33,12 +33,12 @@ final class RecordingSession {
     /// The call app, for recording its window.
     private let appBundleID: String?
 
-    init(app: String, bundleID: String? = nil, title: String?, autoStop: Bool) throws {
+    init(app: String, bundleID: String? = nil, title: String?, screen: Bool, autoStop: Bool) throws {
         appBundleID = bundleID
         let now = Date()
         folder = try Self.makeFolder(date: now)
         meta = SessionMeta(app: app, title: title, started: now, duration: 0,
-                           language: Prefs.language, hasScreen: Prefs.recordScreen,
+                           language: Prefs.language, hasScreen: screen,
                            mediaFolder: folder.path, speakerNames: nil)
         self.autoStop = autoStop
     }

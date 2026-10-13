@@ -136,7 +136,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Recording
 
-    private func startRecording(call: CallApp?) {
+    /// `screen` nil follows the setting (and the prompt's checkbox, which changes it).
+    private func startRecording(call: CallApp?, screen: Bool? = nil) {
         guard session == nil, !starting else { return }
         prompt.hide()
         starting = true
@@ -146,7 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             // Started during a detected call: stop when that call ends. Otherwise only by hand.
             newSession = try RecordingSession(app: call?.name ?? "Запис", bundleID: call?.bundleID, title: title,
-                                              autoStop: call != nil)
+                                              screen: screen ?? Prefs.recordScreen, autoStop: call != nil)
         } catch {
             starting = false
             updateStatus()
@@ -306,11 +307,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if Prefs.engine == .groq, Groq.apiKey() == nil {
             add(to: menu, "⚠︎ Немає ключа Groq — відкрити налаштування", #selector(openSettings))
         }
-        let record = session != nil
-            ? add(to: menu, "Зупинити запис", #selector(stopClicked))
-            : add(to: menu, "Почати запис", #selector(startClicked))
+        // The shortcut is shown next to what it does; it works system-wide through HotKey.
+        let record: NSMenuItem
+        if session != nil {
+            record = add(to: menu, "Зупинити запис", #selector(stopClicked))
+        } else {
+            let audio = add(to: menu, "Записати звук", #selector(startAudioClicked))
+            let screen = add(to: menu, "Записати звук і екран", #selector(startScreenClicked))
+            record = Prefs.recordScreen ? screen : audio
+        }
         if Prefs.hotKey {
-            // Shown for reference; the shortcut itself works system-wide through HotKey.
             record.keyEquivalent = "r"
             record.keyEquivalentModifierMask = [.control, .option]
         }
@@ -345,8 +351,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Actions
 
-    @objc private func startClicked() {
-        startRecording(call: detector.current)
+    @objc private func startAudioClicked() {
+        startRecording(call: detector.current, screen: false)
+    }
+
+    @objc private func startScreenClicked() {
+        startRecording(call: detector.current, screen: true)
     }
 
     @objc private func stopClicked() {
