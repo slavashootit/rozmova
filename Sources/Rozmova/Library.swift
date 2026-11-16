@@ -14,7 +14,23 @@ struct CallRecord: Identifiable {
         return Layout(name: id, mediaFolder: media)
     }
 
-    var title: String { meta.displayTitle }
+    /// The event, else who was there, else the app: "Олексій, Максим" beats `Meet: "grz-torn-ecj"`.
+    var title: String {
+        if let event = meta.event?.title { return event }
+        let people = speakers.filter { $0 != Transcriber.me }.map { name(of: $0) }
+            .filter { !$0.hasPrefix(Transcriber.them) }
+        let unique = people.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+        if !unique.isEmpty {
+            let shown = unique.prefix(3).joined(separator: ", ")
+            return unique.count > 3 ? shown + " і ще \(unique.count - 3)" : shown
+        }
+        if meta.title?.hasPrefix("Meet:") == true { return "Зустріч у Meet" }
+        return meta.displayTitle
+    }
+
+    /// Too short to be a conversation (a test, a mis-click): kept, but out of the numbers.
+    var isShort: Bool { meta.duration < CallRecord.shortSeconds }
+    static let shortSeconds = 60.0
     var turns: [Segment] { Transcriber.merge(pieces) }
 
     /// Labels in order of first appearance, "Я" first.
@@ -40,7 +56,7 @@ struct CallRecord: Identifiable {
         self.id = id
         self.meta = meta
         self.pieces = pieces
-        self.searchText = ([meta.displayTitle, meta.app] + pieces.map(\.text)).joined(separator: " ").lowercased()
+        self.searchText = ([meta.displayTitle, meta.app] + (meta.speakerNames ?? [:]).values + pieces.map(\.text)).joined(separator: " ").lowercased()
         self.stats = pieces.isEmpty ? nil : CallStats(pieces: pieces)
     }
 
@@ -86,7 +102,13 @@ final class CallLibrary: ObservableObject {
 
     var selected: CallRecord? { calls.first { $0.id == selection } }
 
-    var overview: Overview { Overview(calls.map(\.summary), period: period) }
+    var overview: Overview { Overview(calls.filter { !$0.isShort }.map(\.summary), period: period) }
+
+    /// How many calls are running through transcription now (set by the app).
+    @Published var processing = 0
+    @Published var showShort = false
+
+    var shortCalls: [CallRecord] { calls.filter(\.isShort) }
 
     func reload() {
         let fm = FileManager.default
@@ -161,7 +183,8 @@ final class CallLibrary: ObservableObject {
 
     var weeks: [WeekGroup] {
         let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
-        let found = needle.isEmpty ? calls : calls.filter { $0.searchText.contains(needle) }
+        // While searching everything is looked through; otherwise the short ones wait in their own group.
+        let found = needle.isEmpty ? calls.filter { !$0.isShort } : calls.filter { $0.searchText.contains(needle) }
         let calendar = Calendar(identifier: .iso8601)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "uk_UA")
@@ -232,8 +255,11 @@ final class CallLibrary: ObservableObject {
 
     /// "24 дзвінки з 11 жовт. 2026": everything History holds, whatever period is picked.
     var historyNote: String? {
-        guard let first = calls.last?.meta.started else { return nil }
-        return "В історії \(Format.calls(calls.count)) з \(Format.shortDay(first))"
+        let real = calls.filter { !$0.isShort }
+        guard let first = real.last?.meta.started else { return nil }
+        let short = calls.count - real.count
+        return "В історії \(Format.calls(real.count)) з \(Format.shortDay(first))"
+            + (short > 0 ? " · ще \(short) коротких записів не в цифрах" : "")
     }
 
     /// Saves the name, rewrites the .txt with it and remembers the voice under that name.

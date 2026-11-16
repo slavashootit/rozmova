@@ -109,6 +109,7 @@ struct CabinetView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(minWidth: 960, minHeight: 600)
+        .tint(Theme.accent)
     }
 }
 
@@ -119,6 +120,13 @@ private struct CallList: View {
 
     var body: some View {
         List(selection: $library.selection) {
+            if library.processing > 0 {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Розшифровую запис…").font(.callout).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 2)
+            }
             Label("Огляд", systemImage: "chart.bar.xaxis")
                 .tag(CallLibrary.overviewID)
             Label("Календар", systemImage: "calendar")
@@ -129,6 +137,19 @@ private struct CallList: View {
                 Section(week.id) {
                     ForEach(week.calls) { call in
                         CallRow(call: call, snippet: library.snippet(for: call))
+                    }
+                }
+            }
+            if library.query.trimmingCharacters(in: .whitespaces).isEmpty, !library.shortCalls.isEmpty {
+                Section {
+                    DisclosureGroup(isExpanded: $library.showShort) {
+                        ForEach(library.shortCalls) { call in
+                            CallRow(call: call, snippet: nil)
+                        }
+                    } label: {
+                        Text("Короткі записи · \(library.shortCalls.count)")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -438,6 +459,9 @@ private struct CallDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
+            if !call.pieces.isEmpty {
+                TalkStrip(call: call, player: player, canSeek: media != nil)
+            }
             if let media {
                 PlayerView(player: player.player)
                     .frame(height: media.isVideo ? 300 : 56)
@@ -500,7 +524,18 @@ private struct CallDetail: View {
                     Chip(icon: "clock", text: Format.timeRange(call.meta.started, call.meta.duration))
                     Chip(icon: "timer", text: Format.minutes(call.meta.duration))
                     if call.speakers.count > 1 {
-                        Chip(icon: "person.2", text: "\(call.speakers.count) учасн.")
+                        Button { player.tab = .people } label: {
+                            HStack(spacing: -7) {
+                                ForEach(call.speakers.prefix(5), id: \.self) { speaker in
+                                    Avatar(name: call.name(of: speaker),
+                                           color: Palette.color(for: speaker, in: call.speakers), size: 22)
+                                        .overlay(Circle().strokeBorder(Color(nsColor: .windowBackgroundColor), lineWidth: 2))
+                                }
+                            }
+                            .padding(.leading, 4)
+                        }
+                        .buttonStyle(.plain)
+                        .help(call.speakers.map { call.name(of: $0) }.joined(separator: ", "))
                     }
                     if let calendar = call.meta.event?.calendar {
                         Chip(icon: "calendar.badge.checkmark", text: calendar)
@@ -528,6 +563,45 @@ private struct CallDetail: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+        }
+    }
+}
+
+/// Who spoke when, across the whole call. A click jumps the recording there (when it exists).
+private struct TalkStrip: View {
+    let call: CallRecord
+    @ObservedObject var player: PlayerModel
+    let canSeek: Bool
+
+    var body: some View {
+        let total = max(call.meta.duration, call.turns.last?.end ?? 1, 1)
+        VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { box in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.06))
+                    ForEach(Array(call.turns.enumerated()), id: \.offset) { _, turn in
+                        Rectangle()
+                            .fill(Palette.color(for: turn.speaker, in: call.speakers))
+                            .frame(width: max(1.5, box.size.width * (turn.end - turn.start) / total))
+                            .offset(x: box.size.width * turn.start / total)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .contentShape(Rectangle())
+                .onTapGesture { point in
+                    guard canSeek else { return }
+                    player.play(from: total * Double(point.x / max(box.size.width, 1)))
+                }
+            }
+            .frame(height: 12)
+            HStack(spacing: 14) {
+                ForEach(call.speakers, id: \.self) { speaker in
+                    HStack(spacing: 5) {
+                        Circle().fill(Palette.color(for: speaker, in: call.speakers)).frame(width: 7, height: 7)
+                        Text(call.name(of: speaker)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
     }
 }

@@ -211,6 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func enqueue(_ layout: Layout) {
         let previous = processing
         processingCount += 1
+        cabinet.library.processing = processingCount
         updateStatus()
         processing = Task {
             await previous?.value
@@ -224,6 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             cabinet.refresh()
             processingCount -= 1
+            cabinet.library.processing = processingCount
             updateStatus()
         }
     }
