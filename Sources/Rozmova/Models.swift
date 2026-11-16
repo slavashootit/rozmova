@@ -71,6 +71,8 @@ struct SessionMeta: Codable {
     var event: EventLink?
     /// Labels named automatically by voice from earlier calls, not typed by the user.
     var recognized: [String]?
+    /// The recording was removed from the dashboard on purpose; transcript and statistics stay.
+    var mediaDeleted: Bool?
 
     /// The calendar event names a call better than a window title like "Zoom Meeting".
     var displayTitle: String {

@@ -154,7 +154,12 @@ private struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Text("Огляд").font(.largeTitle.bold())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Огляд").font(.largeTitle.bold())
+                        if let note = library.historyNote {
+                            Text(note).font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
                     Spacer()
                     Picker("", selection: $library.period) {
                         ForEach(Period.allCases) { period in
@@ -321,7 +326,10 @@ private struct CallDetail: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
             } else {
-                Label("Відео й аудіо не знайдено: їх перемістили або видалили.", systemImage: "exclamationmark.triangle")
+                Label(call.meta.mediaDeleted == true
+                        ? "Запис видалено. Розшифровка, статистика й учасники збережені."
+                        : "Запису немає на місці (переміщено або видалено). Розшифровка, статистика й учасники збережені.",
+                      systemImage: "checkmark.circle")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -343,6 +351,24 @@ private struct CallDetail: View {
         .padding(24)
         .task(id: call.id) {
             player.load(media?.url)
+        }
+        .confirmationDialog("Видалити запис цього дзвінка?", isPresented: $library.askDeleteMedia) {
+            Button("Видалити запис", role: .destructive) {
+                player.load(nil)
+                library.deleteMedia(of: call.id)
+            }
+            Button("Скасувати", role: .cancel) {}
+        } message: {
+            Text("Відео й аудіо потраплять у Смітник. Розшифровка, статистика й учасники залишаться.")
+        }
+        .confirmationDialog("Видалити дзвінок повністю?", isPresented: $library.askDeleteCall) {
+            Button("Видалити все", role: .destructive) {
+                player.load(nil)
+                library.deleteCall(call.id)
+            }
+            Button("Скасувати", role: .cancel) {}
+        } message: {
+            Text("У Смітник потраплять і запис, і розшифровка зі статистикою: дзвінок зникне з «Огляду».")
         }
     }
 
@@ -366,12 +392,19 @@ private struct CallDetail: View {
             }
             Spacer()
             Menu {
-                Button("Відео й аудіо у Finder") { NSWorkspace.shared.open(call.layout.mediaFolder) }
+                if media != nil {
+                    Button("Відео й аудіо у Finder") { NSWorkspace.shared.open(call.layout.mediaFolder) }
+                }
                 Button("Відкрити .txt") { NSWorkspace.shared.open(call.layout.transcript) }
                 if call.layout.hasTracks {
                     Divider()
                     Button("Розшифрувати заново") { library.onReprocess(call.layout) }
                 }
+                Divider()
+                if media != nil || call.layout.hasTracks {
+                    Button("Видалити запис (відео й аудіо)…") { library.askDeleteMedia = true }
+                }
+                Button("Видалити дзвінок повністю…", role: .destructive) { library.askDeleteCall = true }
             } label: {
                 Label("Дії", systemImage: "ellipsis.circle")
             }
@@ -770,6 +803,22 @@ enum Format {
     static func timeRange(_ start: Date, _ duration: Double) -> String {
         let time = formatter("HH:mm")
         return "\(time.string(from: start)) – \(time.string(from: start.addingTimeInterval(duration)))"
+    }
+
+    static func shortDay(_ date: Date) -> String {
+        formatter("d MMM yyyy").string(from: date)
+    }
+
+    /// 1 дзвінок, 2 дзвінки, 5 дзвінків, 21 дзвінок.
+    static func calls(_ count: Int) -> String {
+        let word: String
+        switch (count % 10, count % 100) {
+        case (_, 11...14): word = "дзвінків"
+        case (1, _): word = "дзвінок"
+        case (2...4, _): word = "дзвінки"
+        default: word = "дзвінків"
+        }
+        return "\(count) \(word)"
     }
 
     static func minutes(_ seconds: Double) -> String {

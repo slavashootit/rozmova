@@ -65,11 +65,17 @@ final class CallLibrary: ObservableObject {
 
     @Published var query = ""
     @Published var selection: String? = CallLibrary.overviewID
-    @Published var period = Period.month
+    @Published var period = Period(rawValue: Prefs.period) ?? .all {
+        didSet { Prefs.period = period.rawValue }
+    }
     /// Any date in the month the calendar shows.
     @Published var month = Date()
     /// The day whose calls and meetings are listed under the calendar.
     @Published var day: Date? = Date()
+
+    /// The "delete the recording" / "delete the whole call" questions for the selected call.
+    @Published var askDeleteMedia = false
+    @Published var askDeleteCall = false
 
     /// Set by AppDelegate: transcribe a call again (while its separate tracks still exist).
     var onReprocess: (Layout) -> Void = { _ in }
@@ -167,6 +173,62 @@ final class CallLibrary: ObservableObject {
             }
         }
         return groups
+    }
+
+    /// Moves the recording (video, audio, separate tracks) to the Trash. The transcript,
+    /// statistics and names stay in History, so the call keeps counting in the overview.
+    func deleteMedia(of id: String) {
+        guard let index = calls.firstIndex(where: { $0.id == id }) else { return }
+        var call = calls[index]
+        trashMedia(call.layout)
+        call.meta.mediaDeleted = true
+        calls[index] = call
+        do {
+            try call.meta.save(to: call.layout)
+        } catch {
+            Log.info("Saving \(id) after deleting its media failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Moves everything about the call to the Trash: recording, transcript, statistics.
+    func deleteCall(_ id: String) {
+        guard let index = calls.firstIndex(where: { $0.id == id }) else { return }
+        let layout = calls[index].layout
+        trashMedia(layout)
+        trash(layout.history)
+        calls.remove(at: index)
+        if selection == id {
+            selection = Self.overviewID
+        }
+    }
+
+    private func trashMedia(_ layout: Layout) {
+        trash(layout.video)
+        trash(layout.audio)
+        trash(layout.raw)
+        // The media folder is made for this one call: drop it once nothing visible is left.
+        let fm = FileManager.default
+        if layout.mediaFolder.lastPathComponent == layout.name,
+           let left = try? fm.contentsOfDirectory(at: layout.mediaFolder, includingPropertiesForKeys: nil,
+                                                  options: [.skipsHiddenFiles]), left.isEmpty {
+            trash(layout.mediaFolder)
+        }
+    }
+
+    private func trash(_ url: URL) {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: url.path) else { return }
+        do {
+            try fm.trashItem(at: url, resultingItemURL: nil)
+        } catch {
+            Log.info("Moving \(url.lastPathComponent) to the Trash failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// "24 дзвінки з 11 жовт. 2026": everything History holds, whatever period is picked.
+    var historyNote: String? {
+        guard let first = calls.last?.meta.started else { return nil }
+        return "В історії \(Format.calls(calls.count)) з \(Format.shortDay(first))"
     }
 
     /// Saves the name and rewrites the .txt with it.

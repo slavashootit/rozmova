@@ -93,6 +93,12 @@ enum Prefs {
     /// Transcripts, meta and segments, one folder per call; kept forever (a few KB each).
     static var historyFolder: URL { appFolder.appendingPathComponent("History", isDirectory: true) }
 
+    /// The overview period picked last; "all" by default, so old calls never look lost.
+    static var period: String {
+        get { defaults.string(forKey: "period") ?? "all" }
+        set { defaults.set(newValue, forKey: "period") }
+    }
+
     /// Raw files older than this are deleted; 0 keeps them forever.
     static var cleanupDays: Int {
         get { defaults.object(forKey: "cleanupDays") as? Int ?? 14 }
