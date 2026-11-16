@@ -231,7 +231,7 @@ final class CallLibrary: ObservableObject {
         return "В історії \(Format.calls(calls.count)) з \(Format.shortDay(first))"
     }
 
-    /// Saves the name and rewrites the .txt with it.
+    /// Saves the name, rewrites the .txt with it and remembers the voice under that name.
     func rename(_ speaker: String, to name: String, in id: String) {
         guard let index = calls.firstIndex(where: { $0.id == id }) else { return }
         var call = calls[index]
@@ -240,14 +240,60 @@ final class CallLibrary: ObservableObject {
         call.meta.speakerNames = names
         // Typed by you now, so it is no longer a guess and may teach later calls.
         call.meta.recognized?.removeAll { $0 == speaker }
+        call.meta.suggested?[speaker] = nil
         calls[index] = call
+        save(call)
+        if speaker != Transcriber.me {
+            People.assign(call: id, label: speaker, print: VoiceBook.loadPrints(call.layout)[speaker],
+                          seconds: People.spoken(in: call.pieces)[speaker] ?? 0, name: names[speaker] ?? "")
+        }
+    }
+
+    /// "Yes, that is them": a guessed or offered name becomes a name you set.
+    func confirm(_ speaker: String, in id: String) {
+        guard let call = calls.first(where: { $0.id == id }) else { return }
+        let name = call.meta.suggested?[speaker] ?? call.meta.speakerNames?[speaker] ?? ""
+        guard !name.isEmpty else { return }
+        rename(speaker, to: name, in: id)
+    }
+
+    /// Two labels were one person: everything `speaker` said goes to `target`.
+    func merge(_ speaker: String, into target: String, in id: String) {
+        guard let index = calls.firstIndex(where: { $0.id == id }), speaker != target else { return }
+        var call = calls[index]
+        let pieces = call.pieces.map { piece -> Segment in
+            var piece = piece
+            if piece.speaker == speaker { piece.speaker = target }
+            return piece
+        }
+        call.meta.speakerNames?[speaker] = nil
+        call.meta.recognized?.removeAll { $0 == speaker }
+        call.meta.suggested?[speaker] = nil
+        var prints = VoiceBook.loadPrints(call.layout)
+        prints[speaker] = nil
+        do {
+            try SegmentsFile.save(pieces, to: call.layout)
+            if !prints.isEmpty {
+                try VoiceBook.save(prints, to: call.layout)
+            }
+        } catch {
+            Log.info("Merging voices failed: \(error.localizedDescription)")
+            return
+        }
+        People.assign(call: id, label: speaker, print: nil, seconds: 0, name: "")
+        call = CallRecord(id: id, meta: call.meta, pieces: pieces)
+        calls[index] = call
+        save(call)
+    }
+
+    private func save(_ call: CallRecord) {
         do {
             try call.meta.save(to: call.layout)
             if !call.pieces.isEmpty {
                 try Transcript.write(meta: call.meta, layout: call.layout, turns: call.turns)
             }
         } catch {
-            Log.info("Rename failed: \(error.localizedDescription)")
+            Log.info("Saving \(call.id) failed: \(error.localizedDescription)")
         }
     }
 }

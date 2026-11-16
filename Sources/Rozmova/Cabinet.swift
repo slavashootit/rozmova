@@ -597,6 +597,14 @@ private struct PeopleView: View {
     let call: CallRecord
     @ObservedObject var library: CallLibrary
 
+    /// An earlier voice of this call that already carries the same name.
+    private func twin(of speaker: String) -> String? {
+        let name = call.meta.speakerNames?[speaker] ?? ""
+        guard !name.isEmpty, speaker != Transcriber.me else { return nil }
+        return call.speakers.prefix { $0 != speaker }
+            .first { $0 != Transcriber.me && call.meta.speakerNames?[$0] == name }
+    }
+
     var body: some View {
         Form {
             Section {
@@ -607,16 +615,27 @@ private struct PeopleView: View {
                             get: { call.meta.speakerNames?[speaker] ?? "" },
                             set: { library.rename(speaker, to: $0, in: call.id) }
                         ), prompt: Text("Ім'я"))
-                        if (call.meta.recognized ?? []).contains(speaker) {
+                        if let twin = twin(of: speaker) {
+                            Button("Це одна людина — об'єднати") { library.merge(speaker, into: twin, in: call.id) }
+                                .help("Усе сказане цим голосом перейде до «\(call.name(of: twin))» вище: одна людина, один рядок.")
+                        } else if (call.meta.recognized ?? []).contains(speaker) {
                             Text("впізнано за голосом")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .help("Ім'я з попередніх дзвінків, де ти назвав цей голос. Виправ, якщо не так.")
+                            Button("Так") { library.confirm(speaker, in: call.id) }
+                                .help("Підтвердити: цей запис голосу допоможе впізнавати людину надалі. Якщо не так — просто виправ ім'я.")
+                        } else if let guess = call.meta.suggested?[speaker],
+                                  (call.meta.speakerNames?[speaker] ?? "").isEmpty {
+                            Text("не впевнений")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Button("Схоже на «\(guess)»?") { library.confirm(speaker, in: call.id) }
+                                .help("Голос схожий, але не настільки, щоб підписати самому. Натисни, якщо це справді ця людина.")
                         }
                     }
                 }
             } footer: {
-                Text("Імена потрапляють у розшифровку цього дзвінка, у .txt і в «Огляд» → «Люди». «Співрозмовник 1, 2…» — здогадка за голосом. Rozmova запам'ятовує названі голоси й сама підписує їх у наступних дзвінках.")
+                Text("Імена потрапляють у розшифровку цього дзвінка, у .txt і в «Огляд» → «Люди». Rozmova запам'ятовує голоси, які ти назвав або підтвердив, і підписує їх у наступних дзвінках лише тоді, коли певна. Якщо голос лише схожий — запропонує ім'я, а незнайомий лишить без імені.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

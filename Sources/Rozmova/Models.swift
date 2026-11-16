@@ -71,6 +71,8 @@ struct SessionMeta: Codable {
     var event: EventLink?
     /// Labels named automatically by voice from earlier calls, not typed by the user.
     var recognized: [String]?
+    /// Label → a name the voice only resembles: offered in the dashboard, not set.
+    var suggested: [String: String]?
     /// The recording was removed from the dashboard on purpose; transcript and statistics stay.
     var mediaDeleted: Bool?
 

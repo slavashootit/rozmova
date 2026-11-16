@@ -24,24 +24,73 @@ enum Pipeline {
             try meta.save(to: layout)
         }
         let result = try await Transcriber.transcribe(layout, language: meta.language, engine: Prefs.engine)
-        try SegmentsFile.save(result.pieces, to: layout)
-        if !result.voices.isEmpty {
-            try VoiceBook.save(result.voices, to: layout)
-            // Voices you named in earlier calls; names already typed for this call stay.
-            var names = meta.speakerNames ?? [:]
-            var recognized = meta.recognized ?? []
-            let guesses = VoiceBook.recognize(result.voices, skipping: layout.name)
-            for (label, name) in guesses where (names[label] ?? "").isEmpty {
-                names[label] = name
-                recognized.append(label)
+        var pieces = result.pieces
+        var prints = result.voices
+        if !prints.isEmpty {
+            let oldPrints = VoiceBook.loadPrints(layout)
+            let oldNames = meta.speakerNames ?? [:]
+            let oldRecognized = meta.recognized ?? []
+            var names: [String: String] = [:]
+            var recognized: [String] = []
+            if oldPrints.isEmpty {
+                names = oldNames
+                recognized = oldRecognized
+            } else {
+                // Transcribed again: the voices are numbered anew, so names follow the voice,
+                // not the number. "Я" and other labels without a print keep theirs.
+                for (label, name) in oldNames where oldPrints[label] == nil {
+                    names[label] = name
+                }
+                for (label, old) in People.carryOver(new: prints, old: oldPrints) {
+                    guard let name = oldNames[old], !name.isEmpty else { continue }
+                    names[label] = name
+                    if oldRecognized.contains(old) {
+                        recognized.append(label)
+                    }
+                }
             }
-            if names != (meta.speakerNames ?? [:]) {
-                meta.speakerNames = names
-                meta.recognized = recognized
-                try meta.save(to: layout)
+
+            // Voices you named in earlier calls, for the labels still without a name.
+            let unnamed = prints.filter { (names[$0.key] ?? "").isEmpty }
+            let taken = Set(names.filter { $0.key != Transcriber.me }.values.filter { !$0.isEmpty })
+            let guesses = People.recognize(unnamed, skipping: layout.name, taken: taken)
+            var suggested: [String: String] = [:]
+            var owner: [String: String] = [:]
+            for (label, guess) in guesses.sorted(by: { $0.value.distance < $1.value.distance }) {
+                if !guess.sure {
+                    suggested[label] = guess.name
+                } else if let first = owner[guess.name] {
+                    // One person split into two voices: fold the weaker one into the first.
+                    pieces = pieces.map { piece in
+                        var piece = piece
+                        if piece.speaker == label { piece.speaker = first }
+                        return piece
+                    }
+                    prints[label] = nil
+                } else {
+                    owner[guess.name] = label
+                    names[label] = guess.name
+                    recognized.append(label)
+                }
+            }
+
+            try VoiceBook.save(prints, to: layout)
+            meta.speakerNames = names.isEmpty ? nil : names
+            meta.recognized = recognized.isEmpty ? nil : recognized
+            meta.suggested = suggested.isEmpty ? nil : suggested
+            try meta.save(to: layout)
+
+            // The samples of this call are taken again from the new prints.
+            People.forget(call: layout.name)
+            let seconds = People.spoken(in: pieces)
+            for (label, name) in names where !name.isEmpty && !recognized.contains(label) {
+                People.assign(call: layout.name, label: label, print: prints[label],
+                              seconds: seconds[label] ?? 0, name: name)
             }
         }
-        try Transcript.write(meta: meta, layout: layout, turns: result.turns)
-        return Result(file: layout.transcript, note: result.turns.isEmpty ? "Мови в записі не знайшлося." : nil)
+        try SegmentsFile.save(pieces, to: layout)
+        let turns = Transcriber.merge(pieces)
+        try Transcript.write(meta: meta, layout: layout, turns: turns)
+        return Result(file: layout.transcript, note: turns.isEmpty ? "Мови в записі не знайшлося." : nil)
     }
 }

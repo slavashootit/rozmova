@@ -78,14 +78,9 @@ enum Voices {
     }
 }
 
-/// Who is who across calls. When you name "Співрозмовник 2" in one call, that voice print is
-/// remembered with the name, and a later call with a close enough voice gets the same name.
-/// A guess like the voice split itself; a name you type always wins.
+/// The voice prints of one call (voices.json) and how far apart two prints are.
+/// Who they belong to is decided in `People`.
 enum VoiceBook {
-    /// Cosine distance below which two prints count as one person. Stricter than the diarizer's
-    /// in-call 0.65, since microphones and rooms differ between calls.
-    static let threshold: Float = 0.5
-
     static func loadPrints(_ layout: Layout) -> [String: [Float]] {
         guard let data = try? Data(contentsOf: layout.voices) else { return [:] }
         return (try? JSONDecoder().decode([String: [Float]].self, from: data)) ?? [:]
@@ -95,39 +90,7 @@ enum VoiceBook {
         try JSONEncoder().encode(prints).write(to: layout.voices, options: .atomic)
     }
 
-    /// Names for this call's voices, learned from every other call where you typed a name.
-    static func recognize(_ prints: [String: [Float]], skipping call: String) -> [String: String] {
-        guard !prints.isEmpty else { return [:] }
-        var known: [(name: String, print: [Float])] = []
-        let folders = (try? FileManager.default.contentsOfDirectory(
-            at: Prefs.historyFolder, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
-        for folder in folders where folder.lastPathComponent != call {
-            let layout = Layout(name: folder.lastPathComponent, mediaFolder: folder)
-            guard let meta = try? SessionMeta.load(from: layout), let names = meta.speakerNames else { continue }
-            let saved = loadPrints(layout)
-            // Only names you typed: an automatic guess must not teach the next guess.
-            for (label, name) in names where !name.isEmpty && !(meta.recognized ?? []).contains(label) {
-                if let print = saved[label] {
-                    known.append((name, print))
-                }
-            }
-        }
-
-        var pairs: [(label: String, name: String, distance: Float)] = []
-        for (label, print) in prints {
-            for person in known where person.print.count == print.count {
-                pairs.append((label, person.name, distance(print, person.print)))
-            }
-        }
-        // Closest pairs first; one name per voice and one voice per name.
-        var result: [String: String] = [:]
-        for pair in pairs.sorted(by: { $0.distance < $1.distance }) where pair.distance < threshold {
-            guard result[pair.label] == nil, !result.values.contains(pair.name) else { continue }
-            result[pair.label] = pair.name
-        }
-        return result
-    }
-
+    /// Cosine distance: 0 for the same direction, 1 for unrelated prints.
     static func distance(_ a: [Float], _ b: [Float]) -> Float {
         var dot: Float = 0, normA: Float = 0, normB: Float = 0
         for index in 0..<min(a.count, b.count) {
