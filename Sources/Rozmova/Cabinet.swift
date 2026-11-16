@@ -164,14 +164,46 @@ private struct CallRow: View {
 
 // MARK: - Overview
 
+/// Fades and lifts a block in when the page opens, one after another. Reduce Motion: no movement.
+private struct Appear: ViewModifier {
+    let shown: Bool
+    let order: Int
+    let reduce: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown || reduce ? 1 : 0)
+            .offset(y: shown || reduce ? 0 : 14)
+            .animation(reduce ? nil : .spring(response: 0.55, dampingFraction: 0.86).delay(Double(order) * 0.07), value: shown)
+    }
+}
+
+@MainActor
+private final class RevealModel: ObservableObject {
+    @Published var shown = false
+}
+
 private struct OverviewView: View {
     @ObservedObject var library: CallLibrary
+    @StateObject private var reveal = RevealModel()
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
+    private func appear(_ order: Int) -> Appear {
+        Appear(shown: reveal.shown, order: order, reduce: reduce)
+    }
+
+    /// 0 until the page has opened, then 1: bars grow from the baseline.
+    private var grow: Double { reveal.shown || reduce ? 1 : 0 }
+
+    /// Changes when the bars should move: the page opened, or another period was picked.
+    private var motionKey: String { "\(reveal.shown)-\(library.period.rawValue)" }
+    private var motion: Animation? { reduce ? nil : .smooth(duration: 0.6) }
 
     var body: some View {
         let overview = library.overview
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Огляд").font(.largeTitle.bold())
                         if let note = library.historyNote {
@@ -188,79 +220,150 @@ private struct OverviewView: View {
                     .labelsHidden()
                     .frame(maxWidth: 440)
                 }
+                .modifier(appear(0))
 
                 if overview.calls == 0 {
                     ContentUnavailableView("За цей період дзвінків немає", systemImage: "phone",
                                            description: Text("Обери довший період або запиши дзвінок."))
                         .frame(maxWidth: .infinity, minHeight: 300)
                 } else {
-                    kpis(overview)
-                    Card("Активність", subtitle: "години в дзвінках") {
-                        activity(overview)
-                    }
+                    hero(overview).modifier(appear(1))
+                    stats(overview).modifier(appear(2))
+                    people(overview).modifier(appear(3))
                     HStack(alignment: .top, spacing: 16) {
                         Card("Програми", subtitle: "години") { apps(overview) }
                         Card("Дні тижня", subtitle: "кількість дзвінків") { weekdays(overview) }
                     }
+                    .modifier(appear(4))
                     if overview.trend.count > 1 {
                         HStack(alignment: .top, spacing: 16) {
                             Card("Твій темп", subtitle: "слів за хвилину, по дзвінках") { pace(overview) }
                             Card("Твоя частка розмови", subtitle: "%, по дзвінках") { share(overview) }
                         }
+                        .modifier(appear(5))
                     }
-                    people(overview)
                 }
             }
-            .padding(24)
+            .padding(28)
         }
+        .onAppear { reveal.shown = true }
     }
 
-    private func kpis(_ overview: Overview) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12)], spacing: 12) {
-            Tile(icon: "phone.fill", tint: .blue, title: "Дзвінків", value: "\(overview.calls)", note: "")
-            Tile(icon: "clock.fill", tint: .indigo, title: "Годин", value: String(format: "%.1f", overview.hours),
-                 note: "в середньому \(Int(overview.averageMinutes.rounded())) хв")
-            Tile(icon: "person.wave.2.fill", tint: .teal, title: "Твоя частка розмови",
-                 value: overview.myShare.map { "\(Int(($0 * 100).rounded()))%" } ?? "—", note: "від усього сказаного")
-            Tile(icon: "speedometer", tint: .orange, title: "Твій темп",
-                 value: overview.myPace.map { "\($0) сл/хв" } ?? "—",
-                 note: "комфортно \(Int(CallStats.paceRange.lowerBound))–\(Int(CallStats.paceRange.upperBound))")
-            Tile(icon: "questionmark.bubble.fill", tint: .green, title: "Твоїх запитань",
-                 value: "\(overview.questionsAsked)", note: "")
-            Tile(icon: "bolt.horizontal.fill", tint: .pink, title: "Ти перебив",
-                 value: "\(overview.interruptions)", note: "разів")
+    // MARK: Blocks
+
+    /// One big number, and the activity that makes it.
+    private func hero(_ overview: Overview) -> some View {
+        let hours = String(format: "%.1f", overview.hours).replacingOccurrences(of: ".", with: ",")
+        let note = "\(Format.calls(overview.calls)) · в середньому \(Int(overview.averageMinutes.rounded())) хв"
+        return HStack(alignment: .center, spacing: 28) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("У розмовах").font(.callout).foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(hours)
+                        .font(.system(size: 60, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text("год").font(.title3).foregroundStyle(.secondary)
+                }
+                .animation(reduce ? nil : .snappy, value: hours)
+                Text(note)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+                    .animation(reduce ? nil : .snappy, value: note)
+            }
+            .frame(width: 230, alignment: .leading)
+            activity(overview)
         }
+        .padding(22)
+        .modifier(Surface(radius: 18))
     }
 
     private func activity(_ overview: Overview) -> some View {
         Chart(overview.buckets) { bucket in
-            BarMark(x: .value("Період", bucket.id, unit: library.period.bucket),
-                    y: .value("Години", bucket.hours))
-                .foregroundStyle(Color.accentColor.gradient)
-                .cornerRadius(3)
+            BarMark(x: .value("Період", bucket.id, unit: overview.bucketUnit),
+                    y: .value("Години", bucket.hours * grow))
+                .foregroundStyle(Theme.accent.gradient)
+                .cornerRadius(4)
         }
-        .frame(height: 200)
+        .chartYAxis(.hidden)
+        .chartXAxis { AxisMarks { _ in AxisValueLabel() } }
+        .frame(height: 150)
+        .animation(motion, value: motionKey)
+    }
+
+    /// The rest of the numbers: plain text on the page, no boxes.
+    private func stats(_ overview: Overview) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 24, alignment: .topLeading), count: 4),
+                  alignment: .leading, spacing: 18) {
+            Stat(title: "Твоя частка розмови",
+                 value: overview.myShare.map { "\(Int(($0 * 100).rounded()))%" } ?? "—",
+                 note: "від усього сказаного", animated: !reduce)
+            Stat(title: "Твій темп",
+                 value: overview.myPace.map { "\($0) сл/хв" } ?? "—",
+                 note: "комфортно \(Int(CallStats.paceRange.lowerBound))–\(Int(CallStats.paceRange.upperBound))", animated: !reduce)
+            Stat(title: "Твоїх запитань", value: "\(overview.questionsAsked)", note: "", animated: !reduce)
+            Stat(title: "Ти перебив", value: "\(overview.interruptions)", note: "разів", animated: !reduce)
+        }
+        .padding(.horizontal, 4)
+    }
+
+    @ViewBuilder
+    private func people(_ overview: Overview) -> some View {
+        Card("Люди", subtitle: "з ким найчастіше говориш") {
+            if overview.people.isEmpty {
+                Text("Тут з'являться люди, щойно ти впишеш їхні імена в дзвінку на вкладці «Учасники».")
+                    .foregroundStyle(.secondary)
+            } else {
+                let top = max(overview.people.map(\.minutes).max() ?? 1, 1)
+                VStack(spacing: 10) {
+                    ForEach(overview.people.prefix(8)) { person in
+                        HStack(spacing: 12) {
+                            Avatar(name: person.id, color: Theme.color(for: person.id), size: 28)
+                            Text(person.id).frame(width: 110, alignment: .leading).lineLimit(1)
+                            GeometryReader { box in
+                                Capsule()
+                                    .fill(Theme.color(for: person.id).gradient.opacity(0.85))
+                                    .frame(width: max(6, box.size.width * CGFloat(person.minutes / top) * grow))
+                                    .frame(maxHeight: .infinity, alignment: .center)
+                                    .animation(motion, value: motionKey)
+                            }
+                            .frame(height: 10)
+                            Text("\(person.calls) дзв. · \(Format.minutes(person.minutes * 60))")
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                                .frame(width: 150, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func apps(_ overview: Overview) -> some View {
         Chart(overview.apps) { app in
-            BarMark(x: .value("Години", app.hours), y: .value("Програма", app.id))
+            BarMark(x: .value("Години", app.hours * grow), y: .value("Програма", app.id))
                 .foregroundStyle(AppStyle.color(app.id).gradient)
-                .cornerRadius(3)
+                .cornerRadius(4)
                 .annotation(position: .trailing) {
                     Text("\(app.calls)").font(.caption2).foregroundStyle(.secondary)
                 }
         }
+        .chartXAxis(.hidden)
         .frame(height: max(80, CGFloat(overview.apps.count) * 34))
+        .animation(motion, value: motionKey)
     }
 
     private func weekdays(_ overview: Overview) -> some View {
         Chart(overview.weekdays) { day in
-            BarMark(x: .value("День", day.label), y: .value("Дзвінків", day.calls))
-                .foregroundStyle(Color.purple.gradient)
-                .cornerRadius(3)
+            BarMark(x: .value("День", day.label), y: .value("Дзвінків", Double(day.calls) * grow))
+                .foregroundStyle(Theme.accent.opacity(0.75).gradient)
+                .cornerRadius(4)
         }
+        .chartYAxis(.hidden)
+        .chartXAxis { AxisMarks { _ in AxisValueLabel() } }
         .frame(height: 160)
+        .animation(motion, value: motionKey)
     }
 
     private func pace(_ overview: Overview) -> some View {
@@ -277,7 +380,7 @@ private struct OverviewView: View {
                 .foregroundStyle(.secondary)
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
         }
-        .foregroundStyle(.orange)
+        .foregroundStyle(Theme.accent)
         .frame(height: 180)
     }
 
@@ -292,31 +395,28 @@ private struct OverviewView: View {
                 .foregroundStyle(.secondary)
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
         }
-        .foregroundStyle(.teal)
+        .foregroundStyle(Theme.accent)
         .chartYScale(domain: 0.0...100.0)
         .frame(height: 180)
     }
+}
 
-    @ViewBuilder
-    private func people(_ overview: Overview) -> some View {
-        Card("Люди", subtitle: "з ким найчастіше говориш") {
-            if overview.people.isEmpty {
-                Text("Тут з'являться люди, щойно ти впишеш їхні імена в дзвінку на вкладці «Учасники».")
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(overview.people.prefix(10)) { person in
-                        HStack(spacing: 10) {
-                            Avatar(name: person.id, color: .orange, size: 26)
-                            Text(person.id)
-                            Spacer()
-                            Text("\(person.calls) дзв. · \(Format.minutes(person.minutes * 60))")
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
+/// A number with a caption, no box.
+private struct Stat: View {
+    let title: String
+    let value: String
+    let note: String
+    let animated: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+            Text(value)
+                .font(.system(size: 26, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+                .animation(animated ? .snappy : nil, value: value)
+            Text(note.isEmpty ? " " : note).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 }
@@ -801,10 +901,9 @@ struct Card<Content: View>: View {
             }
             content
         }
-        .padding(16)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(nsColor: .controlBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.07)))
+        .modifier(Surface(radius: 16))
     }
 }
 
@@ -832,8 +931,7 @@ private struct Tile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.07)))
+        .modifier(Surface(radius: 14))
     }
 }
 
@@ -924,6 +1022,35 @@ private struct PlayerView: NSViewRepresentable {
         if view.player !== player {
             view.player = player
         }
+    }
+}
+
+/// One accent (the teal of the icon) and a calm surface: blocks are told apart by tone and
+/// air, not by outlines.
+enum Theme {
+    static let accent = Color(red: 0.13, green: 0.66, blue: 0.53)
+    private static let people: [Color] = [
+        Color(red: 0.13, green: 0.66, blue: 0.53), .orange, .indigo, .pink, .cyan, .yellow, .purple, .mint,
+    ]
+
+    /// The same person always gets the same colour.
+    static func color(for name: String) -> Color {
+        // FNV-1a: close names (Артем, Таня) still land on different colours.
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in name.utf8 {
+            hash = (hash ^ UInt64(byte)) &* 1_099_511_628_211
+        }
+        return people[Int(hash % UInt64(people.count))]
+    }
+}
+
+/// A block tone one step off the window background; no border.
+struct Surface: ViewModifier {
+    let radius: CGFloat
+
+    func body(content: Content) -> some View {
+        content.background(RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(Color.primary.opacity(0.045)))
     }
 }
 

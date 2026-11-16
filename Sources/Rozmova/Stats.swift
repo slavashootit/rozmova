@@ -202,6 +202,8 @@ struct Overview {
     let questionsAsked: Int
     let interruptions: Int
     let buckets: [Bucket]
+    /// What one bar spans: days, weeks or months, by how long the period really is.
+    let bucketUnit: Calendar.Component
     let apps: [AppTime]
     let weekdays: [Weekday]
     let trend: [TrendPoint]
@@ -242,7 +244,13 @@ struct Overview {
 
         // Activity: every bucket from the period start (or first call) to now, empty ones too.
         var buckets: [Bucket] = []
-        let component = period.bucket
+        // "All time" over a few weeks would be two fat monthly bars: use weeks until it is long.
+        var component = period.bucket
+        if period == .all, let first = list.first?.started,
+           now.timeIntervalSince(first) < 200 * 86_400 {
+            component = .weekOfYear
+        }
+        bucketUnit = component
         if let first = from ?? list.first?.started,
            var cursor = calendar.dateInterval(of: component, for: first)?.start {
             while cursor <= now {
