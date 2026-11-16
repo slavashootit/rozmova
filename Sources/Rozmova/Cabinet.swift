@@ -910,8 +910,16 @@ private struct PeoplePage: View {
                 }
                 ForEach(others, id: \.name) { person in
                     Card(person.name, subtitle: "\(person.samples.count) зап. голосу") {
-                        ForEach(person.samples.sorted { $0.call > $1.call }, id: \.key) { sample in
+                        let samples = person.samples.sorted { $0.call > $1.call }
+                        let open = library.openSamples.contains(person.name)
+                        ForEach(open ? samples : Array(samples.prefix(3)), id: \.key) { sample in
                             sampleRow(sample)
+                        }
+                        if samples.count > 3 {
+                            Button(open ? "Згорнути" : "Показати всі \(samples.count)") {
+                                if open { library.openSamples.remove(person.name) } else { library.openSamples.insert(person.name) }
+                            }
+                            .buttonStyle(.link)
                         }
                         let together = library.calls(with: person.name)
                         if !together.isEmpty {

@@ -45,7 +45,7 @@ final class CalendarEvents: ObservableObject {
         revision += 1
     }
 
-    var hasAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
+    var hasAccess: Bool { Prefs.isDemo || EKEventStore.authorizationStatus(for: .event) == .fullAccess }
 
     /// Asked once; after "Don't Allow" only System Settings can change it.
     var canAsk: Bool { EKEventStore.authorizationStatus(for: .event) == .notDetermined }
@@ -70,6 +70,9 @@ final class CalendarEvents: ObservableObject {
     /// Timed events that overlap the interval. All-day events (birthdays, holidays) are left out.
     func events(from start: Date, to end: Date) -> [CalEvent] {
         guard hasAccess, start < end else { return [] }
+        if Prefs.isDemo {
+            return Self.demoEvents().filter { $0.end > start && $0.start < end }
+        }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
         return store.events(matching: predicate)
             .filter { !$0.isAllDay }
@@ -87,6 +90,29 @@ final class CalendarEvents: ObservableObject {
                 )
             }
             .sorted { $0.start < $1.start }
+    }
+
+    private struct DemoEvent: Decodable {
+        let title: String
+        let start: Date
+        let end: Date
+        let calendar: String
+        let online: Bool
+    }
+
+    /// Meetings from demo-events.json in the demo folder (see Prefs.demoHome).
+    private static func demoEvents() -> [CalEvent] {
+        let url = Prefs.appFolder.appendingPathComponent("demo-events.json")
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = try? Data(contentsOf: url), let list = try? decoder.decode([DemoEvent].self, from: data) else { return [] }
+        return list.map { event in
+            CalEvent(id: "\(event.title)@\(event.start.timeIntervalSince1970)", title: event.title, start: event.start,
+                     end: event.end, calendar: event.calendar, color: event.online ? .systemTeal : .systemOrange,
+                     onlineLink: event.online ? URL(string: "https://meet.google.com/demo") : nil,
+                     hasAttendees: event.online)
+        }
+        .sorted { $0.start < $1.start }
     }
 
     /// First names of the invited people; an address without a name is skipped.

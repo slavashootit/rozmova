@@ -82,7 +82,17 @@ enum Prefs {
         set { defaults.set(newValue?.path, forKey: "lastRecording") }
     }
 
+    /// For development and the screenshots on the site: `ROZMOVA_HOME=/some/folder` makes the app
+    /// read and write everything there (History, Raw, People) instead of your real data, and
+    /// show the meetings from demo-events.json instead of the macOS Calendar.
+    static var demoHome: URL? {
+        ProcessInfo.processInfo.environment["ROZMOVA_HOME"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+    }
+
+    static var isDemo: Bool { demoHome != nil }
+
     static var appFolder: URL {
+        if let demoHome { return demoHome }
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return support.appendingPathComponent("Rozmova", isDirectory: true)
     }

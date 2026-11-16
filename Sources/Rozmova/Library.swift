@@ -114,6 +114,8 @@ final class CallLibrary: ObservableObject {
     /// How many calls are running through transcription now (set by the app).
     @Published var processing = 0
     @Published var showShort = false
+    /// People whose full list of voice samples is open on the "Люди" page.
+    @Published var openSamples: Set<String> = []
 
     var shortCalls: [CallRecord] { calls.filter(\.isShort) }
 
@@ -139,7 +141,7 @@ final class CallLibrary: ObservableObject {
     /// One Calendar query per month, not per call.
     private func linkEvents() {
         let calendar = CalendarEvents.shared
-        guard calendar.hasAccess else { return }
+        guard calendar.hasAccess, !Prefs.isDemo else { return }
         let unlinked = calls.indices.filter { calls[$0].meta.event == nil }
         let months = Dictionary(grouping: unlinked) { index in
             Calendar.current.dateInterval(of: .month, for: calls[index].meta.started)?.start ?? .distantPast

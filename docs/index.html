@@ -8,22 +8,22 @@
 <meta property="og:title" content="Rozmova — запис і розшифровка дзвінків на Маці">
 <meta property="og:description" content="Zoom, Meet, Telegram, Slack — будь-яка програма. Розшифровка на твоєму Маці, без підписки. Відкритий код.">
 <meta property="og:image" content="https://slavashootit.github.io/rozmova/img/overview.webp">
-<meta name="theme-color" content="#0d0b16">
+<meta name="theme-color" content="#0a1214">
 <link rel="icon" href="icon.png">
 <style>
   :root {
-    --bg: #f7f6fb; --surface: #ffffff; --text: #16141f; --muted: #605b75; --line: #e6e3ef;
-    --accent: #7c5cff; --accent2: #e0458f; --key: #f0eef7; --code: #15131f; --codetext: #ebe8f5;
+    --bg: #f4f8f7; --surface: #ffffff; --text: #12201f; --muted: #52676a; --line: #dce8e6;
+    --accent: #14a37d; --accent2: #0b7a86; --key: #e9f2f0; --code: #0e1a1c; --codetext: #e4f0ee;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0d0b16; --surface: #16141f; --text: #eeecf7; --muted: #9e98b6; --line: #272439;
-      --key: #1f1c2e; --code: #0b0a12; --codetext: #ebe8f5;
+      --bg: #0a1214; --surface: #111c1f; --text: #e8f1f0; --muted: #91a8a8; --line: #1f3033;
+      --key: #172529; --code: #081012; --codetext: #e4f0ee;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #0d0b16; --surface: #16141f; --text: #eeecf7; --muted: #9e98b6; --line: #272439;
-    --key: #1f1c2e; --code: #0b0a12; --codetext: #ebe8f5;
+    --bg: #0a1214; --surface: #111c1f; --text: #e8f1f0; --muted: #91a8a8; --line: #1f3033;
+    --key: #172529; --code: #081012; --codetext: #e4f0ee;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -50,18 +50,18 @@
   .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
   .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 12px; font-weight: 600; font-size: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
   .btn:hover { text-decoration: none; border-color: var(--accent); }
-  .btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; box-shadow: 0 8px 26px rgba(124, 92, 255, .35); }
+  .btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: none; box-shadow: 0 8px 26px rgba(20, 163, 125, .35); }
   .note { color: var(--muted); font-size: 14px; margin-top: 14px; }
 
   .install { margin: 34px auto 0; max-width: 760px; text-align: left; }
   .code { display: flex; align-items: center; gap: 12px; background: var(--code); color: var(--codetext); border-radius: 12px; padding: 10px 10px 10px 18px; font: 14px/1.5 ui-monospace, "SF Mono", Menlo, monospace; }
   .code span { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 6px 0; scrollbar-width: none; }
-  .code button { flex: none; border: 1px solid #3a3552; background: #211e33; color: #d3cfe6; border-radius: 8px; padding: 6px 12px; font: 13px -apple-system, system-ui, sans-serif; cursor: pointer; }
-  .code button:hover { background: #2b2742; }
+  .code button { flex: none; border: 1px solid #2e4549; background: #17292d; color: #cfe3e0; border-radius: 8px; padding: 6px 12px; font: 13px -apple-system, system-ui, sans-serif; cursor: pointer; }
+  .code button:hover { background: #20383d; }
   .cap { color: var(--muted); font-size: 13px; margin: 0 0 8px 2px; }
 
   /* ---------- hero illustration: a call and the "record?" prompt, drawn in CSS ---------- */
-  .stage { position: relative; aspect-ratio: 16 / 10; margin: 54px auto 0; max-width: 900px; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(30, 16, 60, .35); background: radial-gradient(120% 90% at 0% 0%, #3b2685 0%, transparent 55%), radial-gradient(90% 80% at 100% 100%, #8a2a6b 0%, transparent 60%), #14111f; color: #fff; text-align: left; font-size: clamp(8px, 1.15vw, 12px); }
+  .stage { position: relative; aspect-ratio: 16 / 10; margin: 54px auto 0; max-width: 900px; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(6, 30, 34, .4); background: radial-gradient(120% 90% at 0% 0%, #0f5a5c 0%, transparent 55%), radial-gradient(90% 80% at 100% 100%, #1b8f70 0%, transparent 60%), #0a1618; color: #fff; text-align: left; font-size: clamp(8px, 1.15vw, 12px); }
   .menubar { position: absolute; inset: 0 0 auto 0; height: 4.4%; min-height: 16px; background: rgba(10, 8, 20, .55); backdrop-filter: blur(8px); display: flex; align-items: center; gap: 14px; padding: 0 14px; }
   .menubar .sp { margin-left: auto; }
   .menubar .wave { display: inline-flex; align-items: center; gap: 2px; height: 1.2em; }
@@ -106,7 +106,7 @@
   .tabs button { font: 600 14px -apple-system, system-ui, sans-serif; padding: 9px 16px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
   .tabs button[aria-selected="true"] { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
   .panel[hidden] { display: none; }
-  .panel img { display: block; width: 100%; height: auto; border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(30, 16, 60, .30); background: #14111f; }
+  .panel img { display: block; width: 100%; height: auto; border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(6, 30, 34, .34); background: #0c1719; }
   .caption { color: var(--muted); font-size: 15px; margin: 14px 0 0; max-width: 720px; }
   .fine { color: var(--muted); font-size: 12px; margin-top: 18px; opacity: .8; }
 
@@ -125,7 +125,7 @@
 
   .files { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
   .term { background: var(--code); color: var(--codetext); border-radius: 14px; padding: 18px 20px; font: 13.5px/1.7 ui-monospace, "SF Mono", Menlo, monospace; overflow-x: auto; white-space: pre; }
-  .term .c { color: #8c86a6; }
+  .term .c { color: #82a09f; }
   .term .t { color: #9db4ff; }
   .term .y { color: #4ea2ff; } .term .o { color: #ffb340; } .term .g { color: #5be07f; }
   .files h3 { margin: 0 0 10px; font-size: 17px; }
@@ -170,7 +170,7 @@
 
 <header class="hero" id="top">
   <div class="wrap">
-    <span class="pill">Безкоштовно · відкритий код · macOS 14+ · v0.11.0</span>
+    <span class="pill">Безкоштовно · відкритий код · macOS 14+ · v0.12.0</span>
     <h1>Записує дзвінки <em>без бота й підписки</em></h1>
     <p class="lead">Rozmova сама помічає дзвінок у будь-якій програмі: Zoom, Google Meet у браузері, Telegram, Slack, FaceTime. Пише твій голос і співрозмовників, за бажанням екран, а потім розшифровує розмову прямо на твоєму Маці. Нічого не йде в хмару.</p>
     <div class="cta">
@@ -187,7 +187,7 @@
     <div class="stage" role="img" aria-label="Ілюстрація: іде відеодзвінок, а Rozmova у правому верхньому куті питає, чи записати його">
       <div class="menubar">
         <span style="font-size:1.3em"></span><b>Відеодзвінок</b><span class="m">Зустріч</span><span class="m">Вигляд</span><span class="m">Вікно</span>
-        <span class="sp wave" aria-hidden="true"><i style="height:35%"></i><i style="height:70%"></i><i style="height:100%"></i><i style="height:60%"></i><i style="height:30%"></i></span>
+        <span class="sp" aria-hidden="true" style="display:inline-flex"><svg viewBox="0 0 24 24" width="17" height="17"><mask id="mb"><rect width="24" height="24" fill="#fff"/><path d="M13 9h5a4 4 0 0 1 4 4v1a4 4 0 0 1-4 4h-.5l-3 3v-3H13a4 4 0 0 1-4-4v-1a4 4 0 0 1 4-4z" fill="#000" stroke="#000" stroke-width="2.6" stroke-linejoin="round"/></mask><path mask="url(#mb)" d="M7 3h4a4 4 0 0 1 4 4v2a4 4 0 0 1-4 4h-1l-3 3v-3a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><path d="M13 9h5a4 4 0 0 1 4 4v1a4 4 0 0 1-4 4h-.5l-3 3v-3H13a4 4 0 0 1-4-4v-1a4 4 0 0 1 4-4z" fill="#fff"/></svg></span>
         <span>Нд 11 жовт. 15:02</span>
       </div>
       <div class="call">
@@ -219,12 +219,13 @@
       <div class="card"><div class="ic">🔔</div><h3>Сама помічає дзвінок</h3><p>Щойно програма бере мікрофон для розмови, справа зверху виїжджає віконце «Записати?». Фокус у дзвінка не забирає. А ⌃⌥R починає чи зупиняє запис із будь-якої програми.</p></div>
       <div class="card"><div class="ic">🌐</div><h3>Будь-яка програма</h3><p>Zoom, Meet і Teams у браузері, Telegram, Slack, FaceTime, WhatsApp, Discord. Бот у дзвінок не заходить, ніхто нічого не помітить.</p></div>
       <div class="card"><div class="ic">🎧</div><h3>Обидві сторони окремо</h3><p>Твій мікрофон і звук системи пишуться на різні доріжки. У розшифровці точно видно, де говориш ти.</p></div>
-      <div class="card"><div class="ic">🗣️</div><h3>Розрізняє голоси</h3><p>Інших учасників ділить за голосом: «Співрозмовник 1», «Співрозмовник 2». Назвеш людину раз — у наступних дзвінках Rozmova впізнає її голос сама.</p></div>
+      <div class="card"><div class="ic">🗣️</div><h3>Впізнає людей за голосом</h3><p>Назвеш співрозмовника, і Rozmova запам'ятає його голос із кількох дзвінків. У наступному підпише сама, але лише коли певна. Якщо голос тільки схожий, запропонує ім'я, а незнайомого лишить без імені.</p></div>
+      <div class="card"><div class="ic">👥</div><h3>Сторінка «Люди»</h3><p>Видно, які записи навчили програму голосу кожної людини. Можна перейменувати, з'єднати двох в одну, прибрати помилковий запис і відкрити всі розмови з нею.</p></div>
       <div class="card"><div class="ic">🧠</div><h3>Розшифровка на Маці</h3><p>NVIDIA Parakeet на Neural Engine: 25 європейських мов, зокрема українська. Безкоштовно й без інтернету. Хочеш хмару — є Groq.</p></div>
       <div class="card"><div class="ic">🖥️</div><h3>Запис екрана</h3><p>30 кадрів/с зі звуком розмови. Головний дисплей, інший монітор або лише вікно Zoom чи Meet — тоді демонстрацію співрозмовника видно завжди.</p></div>
-      <div class="card"><div class="ic">🗂️</div><h3>«Мої дзвінки»</h3><p>Усі розмови в одному вікні: пошук по тексту всіх дзвінків відкриває потрібну репліку, плеєр вмикає запис із будь-якого місця.</p></div>
-      <div class="card"><div class="ic">📊</div><h3>Статистика без нейронок</h3><p>Хто скільки говорив, твій темп, запитання, перебивання, паузи, слова-паразити. Огляд за тиждень, місяць, рік.</p></div>
-      <div class="card"><div class="ic">🧹</div><h3>Прибирає за собою</h3><p>Технічні файли видаляються самі через 2 тижні. Відео, аудіо й розшифровки лишаються назавжди.</p></div>
+      <div class="card"><div class="ic">🗂️</div><h3>«Мої дзвінки»</h3><p>Усі розмови в одному вікні. Дзвінок названо за подією з календаря або за людьми, що були на ньому. Пошук по тексту відкриває потрібну репліку, а розшифровку можна скопіювати одним кліком, з іменами й таймкодами.</p></div>
+      <div class="card"><div class="ic">📊</div><h3>Статистика без нейронок</h3><p>Хто скільки говорив, твій темп, запитання, перебивання, паузи, слова-паразити. Огляд за тиждень, місяць, рік або за весь час. Під кожним дзвінком смужка, хто й коли говорив.</p></div>
+      <div class="card"><div class="ic">🧹</div><h3>Видалив запис, статистика лишилась</h3><p>Відео й аудіо займають місце, а розшифровка з цифрами майже нічого. Прибери запис у меню «Дії», і розшифровка, статистика й учасники лишаться назавжди та й далі рахуються в огляді. Окремі доріжки програма чистить сама через 2 тижні.</p></div>
       <div class="card"><div class="ic">🔒</div><h3>Приватність</h3><p>Ні акаунтів, ні аналітики, ні хмари. Записи лежать у теці на твоєму Маці й нікуди не відправляються.</p></div>
       <div class="card"><div class="ic">♾️</div><h3>Без лімітів</h3><p>Скільки завгодно дзвінків будь-якої довжини. Ні лічильника хвилин, ні платного плану.</p></div>
       <div class="card"><div class="ic">📅</div><h3>Календар дзвінків</h3><p>Місяць дзвінків по днях, поруч зустрічі з Календаря macOS. Дзвінок отримує назву події, а за хвилину до онлайн-зустрічі приходить нагадування.</p></div>
@@ -240,7 +241,7 @@
       <div class="card"><h3>Помічає</h3><p>Раз на 2 секунди дивиться, яка програма тримає мікрофон. Програми для диктування (Superwhisper, Wispr Flow) дзвінком не вважаються.</p></div>
       <div class="card"><h3>Пише</h3><p>Мікрофон і звук системи на одній шкалі часу, плюс екран, якщо ввімкнено. Дзвінок закінчився — запис зупиняється сам.</p></div>
       <div class="card"><h3>Розшифровує</h3><p>За кілька хвилин приходить сповіщення «Розшифровка готова»: текст із часом і тим, хто говорить.</p></div>
-      <div class="card"><h3>Рахує</h3><p>Статистика рахується з таймкодів слів, без мовних моделей. Усе одразу видно в «Моїх дзвінках».</p></div>
+      <div class="card"><h3>Рахує</h3><p>Статистика рахується з таймкодів слів, без мовних моделей. Усе одразу видно в «Моїх дзвінках». Поки йде розшифровка, угорі списку крутиться індикатор.</p></div>
     </div>
   </div>
 </section>
@@ -252,16 +253,21 @@
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-p="p1">Огляд</button>
       <button role="tab" aria-selected="false" data-p="p2">Дзвінок</button>
+      <button role="tab" aria-selected="false" data-p="p5">Люди</button>
       <button role="tab" aria-selected="false" data-p="p3">Статистика</button>
       <button role="tab" aria-selected="false" data-p="p4">Календар</button>
     </div>
     <div class="panel" id="p1" role="tabpanel">
-      <img src="img/overview.webp" width="1800" height="1125" alt="Огляд за місяць: кількість дзвінків, години, твоя частка розмови, темп, графіки активності, програм і днів тижня, люди" loading="lazy">
-      <p class="caption">Огляд за тиждень, місяць чи рік: скільки часу в дзвінках, у яких програмах, як змінюється твій темп і з ким говориш найчастіше.</p>
+      <img src="img/overview.webp" width="1800" height="1125" alt="Огляд за весь час: години в розмовах, активність, твоя частка розмови, темп, люди, програми й дні тижня, люди" loading="lazy">
+      <p class="caption">Одне велике число — години в розмовах, поруч активність. Нижче людей, з якими говориш найчастіше, програми й дні тижня. Видалені записи на цифри не впливають.</p>
     </div>
     <div class="panel" id="p2" role="tabpanel" hidden>
       <img src="img/call.webp" width="1800" height="1125" alt="Сторінка дзвінка: плеєр із записом екрана й розшифровка з часом і іменами" loading="lazy">
-      <p class="caption">Відео екрана зі звуком і розшифровка поруч. Клік на час репліки вмикає запис саме з цього місця.</p>
+      <p class="caption">Учасники аватарками в шапці, під нею смужка, хто й коли говорив, а нижче розшифровка. Клік на час репліки вмикає запис із цього місця, поки запис є.</p>
+    </div>
+    <div class="panel" id="p5" role="tabpanel" hidden>
+      <img src="img/people.webp" width="1800" height="1125" alt="Сторінка «Люди»: кожна людина з записами голосу, з яких Rozmova її впізнає, і списком розмов" loading="lazy">
+      <p class="caption">Кожна людина, яку ти назвав, із записами голосу з різних дзвінків. Помилковий запис можна прибрати, двох людей з'єднати в одну, а розмови з нею відкрити звідси.</p>
     </div>
     <div class="panel" id="p3" role="tabpanel" hidden>
       <img src="img/stats.webp" width="1800" height="1125" alt="Статистика дзвінка: частка розмови кожного, темп, запитання, перебивання, паузи, слова-паразити, графік темпу" loading="lazy">
@@ -271,7 +277,7 @@
       <img src="img/calendar.webp" width="1800" height="1125" alt="Календар: місяць із дзвінками по днях, зустрічі з Календаря macOS і розклад вибраного дня" loading="lazy">
       <p class="caption">Дзвінки по днях, а поруч зустрічі з Календаря macOS: видно, що записано, а що ні. Клік на день показує його розклад, клік на дзвінок відкриває його.</p>
     </div>
-    <p class="fine">Зображення — макети інтерфейсу з вигаданими даними; у програмі деталі можуть відрізнятись.</p>
+    <p class="fine">Знімки зроблено з вигаданими дзвінками й людьми; у програмі деталі можуть відрізнятись.</p>
   </div>
 </section>
 
@@ -328,7 +334,7 @@
       <li><b>Завантаж і перетягни в «Програми»</b><span>Відкрий <code>Rozmova.dmg</code> і перетягни Rozmova на папку Applications. Або встанови одним рядком у Терміналі, команда вгорі сторінки.</span></li>
       <li><b>Перший запуск</b><span>Програма не нотаризована Apple, тож macOS спершу її заблокує. Системні параметри → Приватність і безпека → «Усе одно відкрити». Або одним рядком: <code>xattr -dr com.apple.quarantine /Applications/Rozmova.app</code></span></li>
       <li><b>Дозволи</b><span>Мікрофон — щоб писати твій голос. Запис екрана й системного звуку — щоб писати співрозмовників (macOS спитає на першому записі, потім перезапусти програму). Сповіщення — щоб бачити «Розшифровка готова». За бажанням Календар — щоб дзвінки отримували назви зустрічей.</span></li>
-      <li><b>Користуйся</b><span>Іконка з хвилькою з'явиться в рядку меню. Почни будь-який дзвінок, і Rozmova спитає, чи записувати. Перша розшифровка один раз скачає модель, приблизно 0,6 ГБ.</span></li>
+      <li><b>Користуйся</b><span>Іконка з двома бульбашками з'явиться в рядку меню. Почни будь-який дзвінок, і Rozmova спитає, чи записувати. Перша розшифровка один раз скачає модель, приблизно 0,6 ГБ.</span></li>
     </ol>
   </div>
 </section>
@@ -342,7 +348,8 @@
     <details><summary>Не пишеться звук співрозмовника</summary><p>Потрібен дозвіл «Запис екрана й системного звуку»: Системні параметри → Приватність і безпека → увімкни Rozmova й перезапусти програму.</p></details>
     <details><summary>Віконце з'являється, коли я диктую текст</summary><p>Популярні програми для диктування Rozmova пропускає сама. Для решти натисни у віконці «Це не дзвінок», і ця програма більше не потурбує.</p></details>
     <details><summary>Чи записує, коли в дзвінку ввімкнений mute?</summary><p>Так: Rozmova пише мікрофон напряму, тож у розшифровку може потрапити те, чого співрозмовники не чули. Пам'ятай про це.</p></details>
-    <details><summary>Наскільки точно розрізняються співрозмовники?</summary><p>«Я» — завжди точно, бо це окрема доріжка. Інших програма ділить за голосом, і це здогадка: схожі голоси можуть злитися в один. Найчистіше виходить у навушниках.</p></details>
+    <details><summary>Наскільки точно розрізняються співрозмовники?</summary><p>«Я» — окрема доріжка, тож точно, якщо ти в навушниках. Інших програма ділить за голосом, і це здогадка: схожі голоси можуть злитися в один. Ім'я Rozmova ставить сама лише коли певна, коли голос тільки схожий — пропонує його кнопкою, а незнайомого лишає без імені. Помилку видно й можна виправити на сторінці «Люди».</p></details>
+    <details><summary>Що буде з дзвінком, якщо видалити відео й аудіо?</summary><p>Нічого страшного: у меню «Дії» → «Видалити запис» файли потрапляють у Смітник, а розшифровка, статистика й учасники лишаються. Дзвінок і далі в списку та в огляді. Лише «Видалити дзвінок повністю» прибирає все. Але без запису вже не можна розшифрувати його знову.</p></details>
     <details><summary>А це взагалі законно — записувати дзвінки?</summary><p>Залежить від країни, але правило просте: попереджай людей, що дзвінок записується.</p></details>
     <details><summary>Як оновлюватися?</summary><p>Rozmova раз на добу перевіряє GitHub і повідомить про нову версію: пункт у меню й сповіщення ведуть на сторінку завантаження. Або просто ще раз виконай команду встановлення з початку сторінки.</p></details>
     <details><summary>Як зібрати самому?</summary><p>Потрібні Command Line Tools зі Swift 6 (<code>xcode-select --install</code>). Далі <code>git clone https://github.com/slavashootit/rozmova.git &amp;&amp; cd rozmova &amp;&amp; ./build.sh</code>.</p></details>
