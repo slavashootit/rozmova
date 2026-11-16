@@ -28,6 +28,13 @@ struct CallRecord: Identifiable {
         return meta.displayTitle
     }
 
+    /// The whole conversation as plain text for pasting elsewhere: who said what, and when.
+    var clipboardText: String {
+        let header = "\(title)\n\(Format.day(meta.started)), \(Format.timeRange(meta.started, meta.duration))"
+        let lines = turns.map { "[\(Timecode.string($0.start))] \(name(of: $0.speaker)): \($0.text)" }
+        return ([header, ""] + lines).joined(separator: "\n")
+    }
+
     /// Too short to be a conversation (a test, a mis-click): kept, but out of the numbers.
     var isShort: Bool { meta.duration < CallRecord.shortSeconds }
     static let shortSeconds = 60.0
@@ -201,6 +208,11 @@ final class CallLibrary: ObservableObject {
             }
         }
         return groups
+    }
+
+    /// Calls where this person was named, newest first.
+    func calls(with name: String) -> [CallRecord] {
+        calls.filter { $0.meta.speakerNames?.values.contains(name) == true }
     }
 
     /// Moves the recording (video, audio, separate tracks) to the Trash. The transcript,

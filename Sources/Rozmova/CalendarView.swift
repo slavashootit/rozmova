@@ -299,7 +299,7 @@ private struct DayCell: View {
             } label: {
                 HStack(spacing: 4) {
                     Circle().fill(color).frame(width: 6, height: 6)
-                    Text(Self.time(call.meta.started)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                    Text(Self.time(call.meta.started)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1).fixedSize()
                     Text(call.title).font(.caption).lineLimit(1)
                 }
                 .padding(.horizontal, 4)
@@ -320,7 +320,7 @@ private struct DayCell: View {
                 } else {
                     Circle().strokeBorder(Color(nsColor: event.color), lineWidth: 1.5).frame(width: 6, height: 6)
                 }
-                Text(Self.time(event.start)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                Text(Self.time(event.start)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1).fixedSize()
                 Text(event.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             .padding(.horizontal, 4)

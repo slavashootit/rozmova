@@ -355,6 +355,9 @@ private struct OverviewView: View {
                                 .foregroundStyle(.secondary)
                                 .frame(width: 150, alignment: .trailing)
                         }
+                        .contentShape(Rectangle())
+                        .onTapGesture { library.selection = CallLibrary.peopleID }
+                        .help("Відкрити «Люди»")
                     }
                 }
             }
@@ -549,6 +552,12 @@ private struct CallDetail: View {
                     Button("Відео й аудіо у Finder") { NSWorkspace.shared.open(call.layout.mediaFolder) }
                 }
                 Button("Відкрити .txt") { NSWorkspace.shared.open(call.layout.transcript) }
+                if !call.pieces.isEmpty {
+                    Button("Скопіювати розшифровку") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(call.clipboardText, forType: .string)
+                    }
+                }
                 if call.layout.hasTracks {
                     Divider()
                     Button("Розшифрувати заново") { library.onReprocess(call.layout) }
@@ -903,6 +912,28 @@ private struct PeoplePage: View {
                     Card(person.name, subtitle: "\(person.samples.count) зап. голосу") {
                         ForEach(person.samples.sorted { $0.call > $1.call }, id: \.key) { sample in
                             sampleRow(sample)
+                        }
+                        let together = library.calls(with: person.name)
+                        if !together.isEmpty {
+                            Divider().padding(.vertical, 2)
+                            Text("Розмови · \(together.count)").font(.callout).foregroundStyle(.secondary)
+                            ForEach(together.prefix(6)) { call in
+                                Button {
+                                    library.selection = call.id
+                                } label: {
+                                    HStack {
+                                        Text(call.title).lineLimit(1)
+                                        Spacer()
+                                        Text(Format.dayTime(call.meta.started) + " · " + Format.minutes(call.meta.duration))
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            if together.count > 6 {
+                                Text("і ще \(together.count - 6)").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                         HStack {
                             Button("Перейменувати…") { askName(for: person) }
