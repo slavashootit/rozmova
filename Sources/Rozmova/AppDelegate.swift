@@ -279,11 +279,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let tint: NSColor?
         let title: String
         if let session {
-            symbol = "record.circle.fill"
+            symbol = "recording"
             tint = .systemRed
             title = " " + Timecode.short(session.elapsed)
         } else {
-            symbol = processingCount > 0 ? "text.bubble" : "waveform"
+            symbol = processingCount > 0 ? "processing" : "idle"
             tint = nil
             title = ""
         }
@@ -292,7 +292,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if button.contentTintColor != tint { button.contentTintColor = tint }
         if statusSymbol != symbol {
             statusSymbol = symbol
-            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Rozmova")
+            let image = symbol == "recording" ? StatusIcons.recording
+                : symbol == "processing" ? StatusIcons.processing : StatusIcons.idle
+            image.accessibilityDescription = "Rozmova"
+            button.image = image
             button.imagePosition = .imageLeading
         }
     }
