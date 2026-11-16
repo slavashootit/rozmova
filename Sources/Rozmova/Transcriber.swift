@@ -13,6 +13,8 @@ enum Transcriber {
         let turns: [Segment]
         /// Voice print per label of the other side, for recognizing people in later calls.
         let voices: [String: [Float]]
+        /// Your own voice print from the microphone, when it clearly held one voice.
+        let myPrint: [Float]?
     }
 
     static func transcribe(_ layout: Layout, language: String, engine: SpeechEngine) async throws -> Result {
@@ -41,8 +43,16 @@ enum Transcriber {
             theirs = labeled.segments
             voices = labeled.prints
         }
-        let pieces = (removeEcho(mine, heard: theirs) + theirs).sorted { $0.start < $1.start }
-        return Result(pieces: pieces, turns: merge(pieces), voices: voices)
+        mine = removeEcho(mine, heard: theirs)
+        var myPrint: [Float]?
+        if Prefs.splitVoices, FileManager.default.fileExists(atPath: layout.mic.path) {
+            let split = await Voices.splitMine(mine, audio: layout.mic, others: voices)
+            mine = split.segments
+            voices.merge(split.prints) { old, _ in old }
+            myPrint = split.myPrint
+        }
+        let pieces = (mine + theirs).sorted { $0.start < $1.start }
+        return Result(pieces: pieces, turns: merge(pieces), voices: voices, myPrint: myPrint)
     }
 
     /// Drops empty and invented phrases, collapses loops, labels the speaker.

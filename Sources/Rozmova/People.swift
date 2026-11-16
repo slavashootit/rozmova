@@ -7,6 +7,8 @@ struct VoiceSample: Codable {
     var print: [Float]
     /// How long that voice spoke in the call; short ones are too noisy to learn from.
     var seconds: Double
+
+    var key: String { call + "/" + label }
 }
 
 struct Person: Codable {
@@ -95,13 +97,34 @@ enum People {
         saveUnlocked(people)
     }
 
+    /// Samples of your own voice, kept under "Я".
+    static func mine() -> [[Float]] {
+        load().first { $0.name == Transcriber.me }?.samples.map(\.print) ?? []
+    }
+
+    /// A person gets another name everywhere; an existing name takes their samples too.
+    static func rename(_ old: String, to new: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        var people = loadUnlocked()
+        guard let index = people.firstIndex(where: { $0.name == old }), old != new, !new.isEmpty else { return }
+        let samples = people.remove(at: index).samples
+        if let target = people.firstIndex(where: { $0.name == new }) {
+            people[target].samples += samples
+        } else {
+            people.append(Person(name: new, samples: samples))
+        }
+        saveUnlocked(people)
+    }
+
     /// Drops every sample taken from this call (before it is transcribed again).
     static func forget(call: String) {
         lock.lock()
         defer { lock.unlock() }
         var people = loadUnlocked()
         for index in people.indices {
-            people[index].samples.removeAll { $0.call == call }
+            // Your own sample is replaced separately, only when a new clean one comes.
+            people[index].samples.removeAll { $0.call == call && $0.label != Transcriber.me }
         }
         people.removeAll { $0.samples.isEmpty }
         saveUnlocked(people)
@@ -153,7 +176,7 @@ enum People {
         var found: [(label: String, guess: Guess)] = []
         for (label, print) in prints {
             let scores = people.compactMap { person -> (name: String, distance: Float)? in
-                guard !taken.contains(person.name) else { return nil }
+                guard !taken.contains(person.name), person.name != Transcriber.me else { return nil }
                 let distances = person.samples
                     .filter { $0.call != call && $0.print.count == print.count }
                     .map { VoiceBook.distance(print, $0.print) }

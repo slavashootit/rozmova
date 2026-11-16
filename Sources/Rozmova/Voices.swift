@@ -11,8 +11,14 @@ enum Voices {
         let prints: [String: [Float]]
     }
 
-    static func label(_ segments: [Segment], audio: URL) async -> Labeled {
-        guard !segments.isEmpty else { return Labeled(segments: segments, prints: [:]) }
+    /// What the diarizer heard: a voice id per transcript piece and a print per voice id.
+    private struct Split {
+        let voices: [String]
+        let prints: [String: [Float]]
+    }
+
+    private static func split(_ segments: [Segment], audio: URL) async -> Split? {
+        guard !segments.isEmpty else { return nil }
         let turns: [TimedSpeakerSegment]
         let database: [String: [Float]]
         do {
@@ -23,9 +29,9 @@ enum Voices {
             database = result.speakerDatabase ?? [:]
         } catch {
             Log.info("Voice split failed: \(error.localizedDescription)")
-            return Labeled(segments: segments, prints: [:])
+            return nil
         }
-        guard !turns.isEmpty else { return Labeled(segments: segments, prints: [:]) }
+        guard !turns.isEmpty else { return nil }
 
         // Each transcript piece goes to the voice that overlaps it most, or the nearest one.
         let voices = segments.map { segment -> String in
@@ -41,15 +47,24 @@ enum Voices {
             }
             return best?.id ?? ""
         }
+        var prints: [String: [Float]] = [:]
+        for voice in Set(voices) {
+            prints[voice] = database[voice] ?? averagePrint(of: voice, in: turns)
+        }
+        return Split(voices: voices, prints: prints)
+    }
+
+    static func label(_ segments: [Segment], audio: URL) async -> Labeled {
+        guard let split = await split(segments, audio: audio) else { return Labeled(segments: segments, prints: [:]) }
+        let voices = split.voices
 
         // Number voices in order of first appearance; ignore a split into just one voice.
         var numbers: [String: Int] = [:]
         for voice in voices where numbers[voice] == nil {
             numbers[voice] = numbers.count + 1
         }
-        let prints = { (voice: String) -> [Float]? in database[voice] ?? averagePrint(of: voice, in: turns) }
         guard numbers.count > 1 else {
-            let print = voices.first.flatMap(prints)
+            let print = voices.first.flatMap { split.prints[$0] }
             return Labeled(segments: segments, prints: print.map { [Transcriber.them: $0] } ?? [:])
         }
         let labeled = zip(segments, voices).map { segment, voice in
@@ -59,9 +74,69 @@ enum Voices {
         }
         var byLabel: [String: [Float]] = [:]
         for (voice, number) in numbers {
-            byLabel["\(Transcriber.them) \(number)"] = prints(voice)
+            byLabel["\(Transcriber.them) \(number)"] = split.prints[voice]
         }
         return Labeled(segments: labeled, prints: byLabel)
+    }
+
+    struct Mine {
+        let segments: [Segment]
+        /// Prints of people found on the microphone besides you, by their new label.
+        let prints: [String: [Float]]
+        /// Your own voice print, when the microphone clearly held one voice.
+        let myPrint: [Float]?
+    }
+
+    /// A voice needs this much speech on the microphone to count as a person, not noise.
+    private static let personSeconds = 30.0
+
+    /// The microphone track: usually only you. When others sit in the room with you (or the
+    /// call plays through speakers), their voices become Співрозмовник N instead of "Я".
+    /// That needs a sample of your voice from an earlier headphone call; without one
+    /// everything on the microphone stays "Я", as before.
+    static func splitMine(_ segments: [Segment], audio: URL, others: [String: [Float]]) async -> Mine {
+        let unchanged = Mine(segments: segments, prints: [:], myPrint: nil)
+        guard let split = await split(segments, audio: audio) else { return unchanged }
+        var seconds: [String: Double] = [:]
+        for (segment, voice) in zip(segments, split.voices) {
+            seconds[voice, default: 0] += max(0, segment.end - segment.start)
+        }
+        let people = seconds.filter { $0.value >= personSeconds && split.prints[$0.key] != nil }.map(\.key)
+        guard people.count > 1 else {
+            // One voice: a clean sample of you, if there is enough of it.
+            let only = people.first.flatMap { (seconds[$0] ?? 0) >= 60 ? split.prints[$0] : nil }
+            return Mine(segments: segments, prints: [:], myPrint: only)
+        }
+        let mySamples = People.mine()
+        guard !mySamples.isEmpty else { return unchanged }
+        let closeness = people.map { voice -> (voice: String, distance: Float) in
+            (voice, mySamples.map { VoiceBook.distance($0, split.prints[voice]!) }.min() ?? 2)
+        }
+        guard let me = closeness.min(by: { $0.distance < $1.distance }), me.distance < People.maybe else { return unchanged }
+
+        // Everyone else: the same label as on the system track if it is the same voice
+        // (speakers leaking into the microphone), otherwise the next free number.
+        var next = (others.keys.compactMap { Int($0.split(separator: " ").last ?? "") }.max() ?? (others.isEmpty ? 0 : 1)) + 1
+        var labels: [String: String] = [:]
+        var prints: [String: [Float]] = [:]
+        for voice in people.sorted(by: { (seconds[$0] ?? 0) > (seconds[$1] ?? 0) }) where voice != me.voice {
+            let print = split.prints[voice]!
+            if let same = others.min(by: { VoiceBook.distance($0.value, print) < VoiceBook.distance($1.value, print) }),
+               VoiceBook.distance(same.value, print) < People.sameVoice {
+                labels[voice] = same.key
+            } else {
+                let label = "\(Transcriber.them) \(next)"
+                next += 1
+                labels[voice] = label
+                prints[label] = print
+            }
+        }
+        let relabeled = zip(segments, split.voices).map { segment, voice -> Segment in
+            var segment = segment
+            if let label = labels[voice] { segment.speaker = label }
+            return segment
+        }
+        return Mine(segments: relabeled, prints: prints, myPrint: nil)
     }
 
     /// When the diarizer gives no speaker database: the turns' prints, weighted by length.

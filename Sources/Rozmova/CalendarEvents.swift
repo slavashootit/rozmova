@@ -12,12 +12,17 @@ struct CalEvent: Identifiable {
     /// Join link of an online meeting (Zoom, Meet, Teams…); nil for an offline event.
     let onlineLink: URL?
     let hasAttendees: Bool
+    /// Names of the invited people, without you.
+    var attendees: [String] = []
 
     var isOnline: Bool { onlineLink != nil }
     /// More likely to be the call than a "focus time" block.
     var isMeeting: Bool { isOnline || hasAttendees }
 
-    var link: EventLink { EventLink(title: title, start: start, end: end, calendar: calendar) }
+    var link: EventLink {
+        EventLink(title: title, start: start, end: end, calendar: calendar,
+                  attendees: attendees.isEmpty ? nil : attendees)
+    }
 }
 
 /// macOS Calendar, read only: meetings next to calls in the dashboard, and their names on calls.
@@ -77,10 +82,22 @@ final class CalendarEvents: ObservableObject {
                     calendar: event.calendar.title,
                     color: event.calendar.color ?? .systemGray,
                     onlineLink: Self.meetingLink(in: [event.url?.absoluteString, event.location, event.notes]),
-                    hasAttendees: event.hasAttendees
+                    hasAttendees: event.hasAttendees,
+                    attendees: Self.names(of: event)
                 )
             }
             .sorted { $0.start < $1.start }
+    }
+
+    /// First names of the invited people; an address without a name is skipped.
+    private static func names(of event: EKEvent) -> [String] {
+        var names: [String] = []
+        for person in event.attendees ?? [] where !person.isCurrentUser {
+            guard let full = person.name, !full.contains("@"),
+                  let first = full.split(separator: " ").first.map(String.init), !names.contains(first) else { continue }
+            names.append(first)
+        }
+        return names
     }
 
     /// The event a finished call happened in, if any.

@@ -62,6 +62,10 @@ final class CallLibrary: ObservableObject {
     /// Sidebar rows that show the overview or the calendar instead of a call.
     static let overviewID = "overview"
     static let calendarID = "calendar"
+    static let peopleID = "people"
+
+    /// Everyone with voice samples, for the "Люди" page.
+    @Published private(set) var people: [Person] = []
 
     @Published var query = ""
     @Published var selection: String? = CallLibrary.overviewID
@@ -95,7 +99,8 @@ final class CallLibrary: ObservableObject {
         }
         .sorted { $0.meta.started > $1.meta.started }
         linkEvents()
-        let pages = [Self.overviewID, Self.calendarID]
+        people = People.load()
+        let pages = [Self.overviewID, Self.calendarID, Self.peopleID]
         if selection == nil || (!pages.contains(selection!) && !calls.contains(where: { $0.id == selection })) {
             selection = Self.overviewID
         }
@@ -246,7 +251,45 @@ final class CallLibrary: ObservableObject {
         if speaker != Transcriber.me {
             People.assign(call: id, label: speaker, print: VoiceBook.loadPrints(call.layout)[speaker],
                           seconds: People.spoken(in: call.pieces)[speaker] ?? 0, name: names[speaker] ?? "")
+            people = People.load()
         }
+    }
+
+    /// Names to offer for a voice of this call: the invited people first, then everyone you
+    /// have named before; without the names this call already uses.
+    func nameIdeas(for call: CallRecord) -> [String] {
+        let used = Set((call.meta.speakerNames ?? [:]).values)
+        var ideas: [String] = []
+        let known = people.sorted { $0.samples.count > $1.samples.count }.map(\.name)
+        for name in (call.meta.event?.attendees ?? []) + known
+        where name != Transcriber.me && !used.contains(name) && !ideas.contains(name) {
+            ideas.append(name)
+        }
+        return Array(ideas.prefix(12))
+    }
+
+    /// The person is called differently from now on: in every call and in the voice samples.
+    /// Renaming to an existing name joins the two people.
+    func renamePerson(_ old: String, to new: String) {
+        let new = new.trimmingCharacters(in: .whitespaces)
+        guard !new.isEmpty, new != old, old != Transcriber.me, new != Transcriber.me else { return }
+        for index in calls.indices {
+            var call = calls[index]
+            guard let names = call.meta.speakerNames, names.values.contains(old)
+                    || (call.meta.suggested ?? [:]).values.contains(old) else { continue }
+            call.meta.speakerNames = names.mapValues { $0 == old ? new : $0 }
+            call.meta.suggested = call.meta.suggested?.mapValues { $0 == old ? new : $0 }
+            calls[index] = call
+            save(call)
+        }
+        People.rename(old, to: new)
+        people = People.load()
+    }
+
+    /// This recording no longer teaches what the person sounds like; the call keeps its names.
+    func removeSample(_ sample: VoiceSample) {
+        People.assign(call: sample.call, label: sample.label, print: nil, seconds: 0, name: "")
+        people = People.load()
     }
 
     /// "Yes, that is them": a guessed or offered name becomes a name you set.
@@ -281,6 +324,7 @@ final class CallLibrary: ObservableObject {
             return
         }
         People.assign(call: id, label: speaker, print: nil, seconds: 0, name: "")
+        people = People.load()
         call = CallRecord(id: id, meta: call.meta, pieces: pieces)
         calls[index] = call
         save(call)

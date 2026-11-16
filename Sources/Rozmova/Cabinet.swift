@@ -65,9 +65,23 @@ final class PlayerModel: ObservableObject {
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
     }
 
+    /// Counts playbacks, so a short sample does not pause something started after it.
+    private var playback = 0
+
     func play(from seconds: Double) {
+        playback += 1
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
         player.play()
+    }
+
+    /// A few seconds of a voice, to hear who it is.
+    func sample(from seconds: Double) {
+        play(from: seconds)
+        let mine = playback
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+            guard let self, self.playback == mine else { return }
+            self.player.pause()
+        }
     }
 }
 
@@ -85,6 +99,8 @@ struct CabinetView: View {
                     CallDetail(call: call, library: library, player: player)
                 } else if library.selection == CallLibrary.calendarID {
                     CalendarView(library: library, events: CalendarEvents.shared)
+                } else if library.selection == CallLibrary.peopleID {
+                    PeoplePage(library: library, player: player)
                 } else {
                     OverviewView(library: library)
                 }
@@ -107,6 +123,8 @@ private struct CallList: View {
                 .tag(CallLibrary.overviewID)
             Label("Календар", systemImage: "calendar")
                 .tag(CallLibrary.calendarID)
+            Label("Люди", systemImage: "person.2")
+                .tag(CallLibrary.peopleID)
             ForEach(library.weeks) { week in
                 Section(week.id) {
                     ForEach(week.calls) { call in
@@ -345,7 +363,7 @@ private struct CallDetail: View {
             switch player.tab {
             case .transcript: TranscriptView(call: call, player: player, query: library.query)
             case .stats: StatsView(call: call)
-            case .people: PeopleView(call: call, library: library)
+            case .people: PeopleView(call: call, library: library, player: player)
             }
         }
         .padding(24)
@@ -596,6 +614,12 @@ private struct StatsView: View {
 private struct PeopleView: View {
     let call: CallRecord
     @ObservedObject var library: CallLibrary
+    @ObservedObject var player: PlayerModel
+
+    /// Where this voice speaks longest: the best few seconds to recognize it by.
+    private func longest(of speaker: String) -> Double? {
+        call.turns.filter { $0.speaker == speaker }.max { ($0.end - $0.start) < ($1.end - $1.start) }?.start
+    }
 
     /// An earlier voice of this call that already carries the same name.
     private func twin(of speaker: String) -> String? {
@@ -615,6 +639,26 @@ private struct PeopleView: View {
                             get: { call.meta.speakerNames?[speaker] ?? "" },
                             set: { library.rename(speaker, to: $0, in: call.id) }
                         ), prompt: Text("Ім'я"))
+                        if player.url != nil, let start = longest(of: speaker) {
+                            Button { player.sample(from: start) } label: { Image(systemName: "play.circle") }
+                                .buttonStyle(.borderless)
+                                .help("Послухати кілька секунд цього голосу")
+                        }
+                        if speaker != Transcriber.me, (call.meta.speakerNames?[speaker] ?? "").isEmpty {
+                            let ideas = library.nameIdeas(for: call)
+                            if !ideas.isEmpty {
+                                Menu {
+                                    ForEach(ideas, id: \.self) { name in
+                                        Button(name) { library.rename(speaker, to: name, in: call.id) }
+                                    }
+                                } label: {
+                                    Image(systemName: "person.crop.circle.badge.plus")
+                                }
+                                .menuStyle(.borderlessButton)
+                                .fixedSize()
+                                .help("Обрати з учасників зустрічі та вже знайомих людей")
+                            }
+                        }
                         if let twin = twin(of: speaker) {
                             Button("Це одна людина — об'єднати") { library.merge(speaker, into: twin, in: call.id) }
                                 .help("Усе сказане цим голосом перейде до «\(call.name(of: twin))» вище: одна людина, один рядок.")
@@ -641,6 +685,96 @@ private struct PeopleView: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+// MARK: - People
+
+/// Everyone Rozmova knows by voice: which recordings taught it, with a way to fix mistakes.
+private struct PeoplePage: View {
+    @ObservedObject var library: CallLibrary
+    @ObservedObject var player: PlayerModel
+
+    private func askName(for person: Person) {
+        let alert = NSAlert()
+        alert.messageText = "Як називати «\(person.name)»?"
+        alert.informativeText = "Ім'я зміниться в усіх дзвінках. Якщо вписати ім'я людини, яка вже є в списку, вони стануть однією."
+        let field = NSTextField(string: person.name)
+        field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Зберегти")
+        alert.addButton(withTitle: "Скасувати")
+        alert.window.initialFirstResponder = field
+        if alert.runModal() == .alertFirstButtonReturn {
+            library.renamePerson(person.name, to: field.stringValue)
+        }
+    }
+
+    var body: some View {
+        let others = library.people.filter { $0.name != Transcriber.me }
+            .sorted { $0.samples.count == $1.samples.count ? $0.name < $1.name : $0.samples.count > $1.samples.count }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Люди").font(.largeTitle.bold())
+                    Text("Голоси, які ти назвав або підтвердив. За ними Rozmova підписує учасників у нових дзвінках.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                if others.isEmpty {
+                    ContentUnavailableView("Ще нікого", systemImage: "person.2",
+                                           description: Text("Назви співрозмовника у вкладці «Учасники» будь-якого дзвінка."))
+                        .frame(maxWidth: .infinity, minHeight: 300)
+                }
+                ForEach(others, id: \.name) { person in
+                    Card(person.name, subtitle: "\(person.samples.count) зап. голосу") {
+                        ForEach(person.samples.sorted { $0.call > $1.call }, id: \.key) { sample in
+                            sampleRow(sample)
+                        }
+                        HStack {
+                            Button("Перейменувати…") { askName(for: person) }
+                            if others.count > 1 {
+                                Menu("Це та сама людина, що й…") {
+                                    ForEach(others.filter { $0.name != person.name }, id: \.name) { other in
+                                        Button(other.name) { library.renamePerson(person.name, to: other.name) }
+                                    }
+                                }
+                                .fixedSize()
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+                if let me = library.people.first(where: { $0.name == Transcriber.me }) {
+                    Card("Мій голос", subtitle: "\(me.samples.count) зап.") {
+                        Text("Зразки з дзвінків у навушниках. За ними Rozmova відрізняє тебе від людей, які сидять поруч і говорять у той самий мікрофон.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(24)
+        }
+    }
+
+    private func sampleRow(_ sample: VoiceSample) -> some View {
+        let call = library.calls.first { $0.id == sample.call }
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(call?.title ?? "Дзвінок видалено")
+                Text((call.map { Format.dayTime($0.meta.started) + " · " } ?? "") + "говорив(ла) " + Format.minutes(sample.seconds))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if call != nil {
+                Button("Відкрити") {
+                    player.tab = .people
+                    library.selection = sample.call
+                }
+                .help("Відкрити дзвінок на вкладці «Учасники»: там голос можна послухати")
+            }
+            Button { library.removeSample(sample) } label: { Image(systemName: "trash") }
+                .buttonStyle(.borderless)
+                .help("Не вчитися на цьому записі: якщо тут підписано не ту людину")
+        }
     }
 }
 

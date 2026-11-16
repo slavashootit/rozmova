@@ -102,6 +102,8 @@ struct EventLink: Codable, Equatable {
     var start: Date
     var end: Date
     var calendar: String?
+    /// First names of the invited people, offered as names for the voices.
+    var attendees: [String]?
 }
 
 enum SegmentsFile {

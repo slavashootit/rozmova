@@ -88,6 +88,10 @@ enum Pipeline {
                               seconds: seconds[label] ?? 0, name: name)
             }
         }
+        if let myPrint = result.myPrint {
+            People.assign(call: layout.name, label: Transcriber.me, print: myPrint,
+                          seconds: People.spoken(in: pieces)[Transcriber.me] ?? 0, name: Transcriber.me)
+        }
         try SegmentsFile.save(pieces, to: layout)
         let turns = Transcriber.merge(pieces)
         try Transcript.write(meta: meta, layout: layout, turns: turns)
