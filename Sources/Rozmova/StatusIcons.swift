@@ -7,6 +7,20 @@ enum StatusIcons {
     static let recording = make("iVBORw0KGgoAAAANSUhEUgAAACwAAAAsCAYAAAAehFoBAAACe0lEQVR4nOyZO2gVQRSGf2/EQsFHQCsJViqKjeADOxEVC0UQ7ZQoaKOghZWdhVrYChYqFvaK2ogPFAvRgG8kiPhEGyEhD0JC3v/Jzg27y53Z2Z0zCRfuBx97d2ez/MzemTlzU0OTUUOT0Qocm6YLvLDEve10M91Elznu66ef6TvaC2V8Ai+m1+kxlOcWPUNHoMSCgva19AFdh+p8pfvpNyhQFLibrkc48pwNUKDN0XaVHoAOK+kS+gSBuHp4CvoUvdFCbNPaDsRhKwKxBd6GOGxHILZpbSnisAKBlFk4fBijD+kbJAtHFx2AIpqBf9CDSFa5aNgCj6IcN+k5OmTOfZfxOv/pJ/qRDrputAX+An9u05Pmc8gyLkzQi/QSnWx0g21e7KC/UcwfJCuY9KzGMl7nOT1Me/INNUeQZ3AjC8tRJGEX0fvQCSvspHcaNbjq4VNw856+NJ8vQ6fmSLOPduYvugLLqL/gaO8yRxkHZxGH8/kLRTuOK3Qv/dug7bU5yqqoPZ/X2YjcIuazRXqM5HUfQjJ6n5rrb80xuD4oYEv6xLdnZGDdNcqsINNen2nzmWdDaE+fhLzKei09ibhMpE9Cds0d5vgdcck8X6OHPyAeUkxlapOqPXyDvjCfu82DYyD1ReYr14bySHFyL3UuK94w3QNd5LvbiWQ9mKVK4PEG117R5VDYURikE04g2zEzBG8Kc0gvy48nq1EdGRPHYRkb2oEF2c4fobvpLrrK429+0kdIfgaQIso6VcYIbOM0vZa7JoO3qMjKEKsG8KF0WGG+AlcKK8xH4MphhSrTWlWkqvuHgLDCXA66NfQXApnLwCq0/ikTm1bg2EwDAAD//8rqs5YAAAAGSURBVAMArSVmJ6FIV/cAAAAASUVORK5CYII=")
     static let processing = make("iVBORw0KGgoAAAANSUhEUgAAACwAAAAsCAYAAAAehFoBAAAC0UlEQVR4nOyYW4hNURzGv5kxKZeUF5fIEEkiI4qRF/KgQS4PSrm8elNiKF6keMCTPONlmhC5PfKAUDPjPjVJZkij3PJGhO/fWnv2/6zZ5xx7O2svp/ZXv+Zba+8z+zurffb6738j6kyNqDMVgX2rUuD95CoZJL9zYtBec1+5UA0Jc0tIF5mFsOonO8lDPekGXkh6yCj8H/oJs4BPogn3luhEHPYZWUumwnyxPJBrtdtrw2Y5rwPqFd5ILlv/lswh3xFGo8lrMsWO15PrYvQKr1D+JMKFhb32KTUezqbv1ZXK9yO8dIbhbDrwdOW/Irw+Kd8SmWKn860isG9lDdxMWsmEMsdnW5I00X62GRmUJfAymI2ll3xBaaEyjtwlLy3ix6vjh8lH+9k3ZDlyCCybyiTrZac8psa7UboBid9mvZxzBPHuOpmcQEplCTzfGTeReWWOiVqdv5X+V1VlCXzJGQ+R+9ZfSDg/mrsNcwslHftrZSkjD5ExMIWJlH9HEdcdN+042krvkFvWyzlbyUGYhXoPc0+nkq7W3sGUd6I2xKsWSpLhnvWSbZqYYuPwrSKwb+mnhH7DaEJ4JWbTK9yn/AyEV4vyzyOjA/cqvxrhtUb5nsjo57A0Tl6psdQAnQgjaaCctf4bmQtTLI1opHSQ42osXRdpYgypOWkp3SDdqHzBmUgv2bgWkaVqbi/UG3RSq0re/9tRXVK49Dlz8iJ7hSxGbSQLs05PJD3W5IRdGFmouGpzxqvII9Qm7GeyA05YUbni55xF+loLED81tiO5SXgApi7WukheIJ2ke/kU6kfmqlq11o3Se1VWVQceC9P72qzmfpA95Aw8KG15+Ut5eWeTH6UuwuXHuQUeK720gfU93+Ece0A2kA/wqFrVEqdhinavYUX/2riWPV6euV3ISWkD6ybhANlEHiNHpa3KpAUqXflrMGEHkLMaUGequwL+DwAAAP//nbhGPwAAAAZJREFUAwCRIpAOHq7YPAAAAABJRU5ErkJggg==")
 
+    /// The recording sign painted red itself: the menu bar ignored contentTintColor and drew
+    /// the template image black on the dark bar.
+    static let recordingRed: NSImage = {
+        let src = recording
+        let out = NSImage(size: src.size, flipped: false) { rect in
+            src.draw(in: rect)
+            NSColor.systemRed.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        out.isTemplate = false
+        return out
+    }()
+
     private static func make(_ base64: String) -> NSImage {
         let image = NSImage(data: Data(base64Encoded: base64) ?? Data()) ?? NSImage()
         image.size = NSSize(width: 22, height: 22)

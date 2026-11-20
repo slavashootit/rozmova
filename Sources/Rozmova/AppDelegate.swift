@@ -303,11 +303,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             title = ""
         }
         // Called every second: touch the menu bar only when something changed.
-        if button.title != title { button.title = title }
+        // The timer gets its own white colour: with the red tint macOS drew it dark on the dark
+        // recording pill, unreadable until hovered. Monospaced digits keep it from jiggling.
+        if button.attributedTitle.string != title {
+            button.attributedTitle = NSAttributedString(string: title, attributes: [
+                .foregroundColor: NSColor.white,
+                .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .medium),
+            ])
+        }
         if button.contentTintColor != tint { button.contentTintColor = tint }
         if statusSymbol != symbol {
             statusSymbol = symbol
-            let image = symbol == "recording" ? StatusIcons.recording
+            let image = symbol == "recording" ? StatusIcons.recordingRed
                 : symbol == "processing" ? StatusIcons.processing : StatusIcons.idle
             image.accessibilityDescription = "Rozmova"
             button.image = image
