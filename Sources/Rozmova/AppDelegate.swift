@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         try? FileManager.default.createDirectory(at: Prefs.recordingsFolder, withIntermediateDirectories: true)
         setUpStatusItem()
+        DockPresence.installMainMenu()
 
         notifier.setUp()
         notifier.onOpen = { [weak self] url in self?.open(url) }
@@ -92,6 +93,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 Log.info("Microphone access denied")
             }
         }
+    }
+
+    /// Click on the Dock icon (or Cmd+Tab) with no window in front: bring the window back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !flag else { return true }
+        if let minimized = DockPresence.openWindows.first(where: { $0.isMiniaturized }) {
+            minimized.deminiaturize(nil)
+        } else {
+            cabinet.show()
+        }
+        return false
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

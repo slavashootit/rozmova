@@ -30,8 +30,7 @@ final class CabinetWindowController {
             window.center()
             self.window = window
         }
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
+        if let window { DockPresence.show(window) }
     }
 
     /// After a new transcript: refresh if the window is open.

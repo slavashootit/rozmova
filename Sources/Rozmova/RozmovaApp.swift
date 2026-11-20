@@ -6,7 +6,7 @@ struct RozmovaMain {
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
-        // Menu bar only: no Dock icon, no main menu.
+        // Menu bar only; DockPresence adds the Dock icon and main menu while a window is open.
         app.setActivationPolicy(.accessory)
         app.run()
     }
