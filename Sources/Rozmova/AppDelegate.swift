@@ -18,7 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var processingCount = 0
     private let settings = SettingsWindowController()
     private let cabinet = CabinetWindowController()
-    private let updates = Updates()
+    private let updates = Updater(.init(repo: "slavashootit/rozmova", bundleID: "com.slava.rozmova",
+                                        assetSuffix: ".dmg", preferredIdentity: "Kadr Dev"))
     private var hotKey: HotKey?
     /// Online meetings already announced, so each gets one reminder.
     private var remindedMeetings: Set<String> = []
@@ -69,14 +70,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard Prefs.announcedVersion != release.version else { return }
             Prefs.announcedVersion = release.version
             self?.notifier.post(title: "Вийшла Rozmova \(release.version)",
-                                body: "У тебе \(Updates.current). Клікни, щоб відкрити сторінку завантаження.",
+                                body: "У тебе \(Updater.current). Онови в меню Rozmova: «Оновити до \(release.version)».",
                                 link: release.page)
         }
-        Task { await updates.check() }
+        if Prefs.checkUpdates { Task { await updates.check() } }
         let updateTimer = Timer(timeInterval: 24 * 3600, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                Task { await self.updates.check() }
+                if Prefs.checkUpdates { Task { await self.updates.check() } }
             }
         }
         RunLoop.main.add(updateTimer, forMode: .common)
@@ -328,7 +329,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
         menu.addItem(NSMenuItem(title: statusLine(), action: nil, keyEquivalent: ""))
         if let release = updates.available {
-            add(to: menu, "⬆︎ Нова версія \(release.version) — завантажити", #selector(openUpdate))
+            let title: String
+            switch updates.phase {
+            case .installing(let text): title = text
+            case .failed(let text): title = "⬆︎ Оновити до \(release.version) (минулого разу: \(text))"
+            default: title = "⬆︎ Є оновлення — оновити до \(release.version)"
+            }
+            add(to: menu, title, #selector(openUpdate))
         }
         if Prefs.engine == .groq, Groq.apiKey() == nil {
             add(to: menu, "⚠︎ Немає ключа Groq — відкрити налаштування", #selector(openSettings))
@@ -413,9 +420,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func openUpdate() {
-        if let page = updates.available?.page {
-            NSWorkspace.shared.open(page)
+        // A recording or its processing would be cut by the relaunch: wait until they are done.
+        if session != nil || starting || processingCount > 0 {
+            notifier.post(title: "Оновлення трохи почекає",
+                          body: "Rozmova зараз пише або обробляє запис. Онови, коли закінчить.")
+            return
         }
+        updates.install()
     }
 
     @objc private func openSettings() {
